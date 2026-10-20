@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="FixIt API")
+from app.config import settings
+
+app = FastAPI(title=settings.app_name)
 
 
 @app.get("/")
 def root():
-    return {"name": "FixIt API"}
+    return {"name": settings.app_name}
