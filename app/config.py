@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     app_name: str = "FixIt API"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/fixit"
+    cors_origins: list[str] = ["http://localhost:8081"]
 
 
 settings = Settings()
