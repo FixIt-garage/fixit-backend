@@ -80,3 +80,9 @@ Set these under Settings → Secrets and variables → Actions. Until real value
 | `REGISTRY_URL` | Container registry host and namespace, e.g. `ghcr.io/fixit-garage` |
 | `REGISTRY_USERNAME` | Registry login user (not needed for GHCR, which uses `GITHUB_TOKEN`) |
 | `REGISTRY_PASSWORD` | Registry password or access token (not needed for GHCR) |
+
+## Deployment (TBD)
+
+The backend deploy target is not decided yet.
+A placeholder workflow lives in `.github/workflows/deploy.yml` and runs manually only.
+The Docker image is built and pushed to GHCR by `.github/workflows/docker.yml` on merge to `main`.
