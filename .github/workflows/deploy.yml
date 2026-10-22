@@ -1,0 +1,12 @@
+name: Deploy (placeholder)
+
+# TODO: deploy target is not decided yet (VPS, Render, Fly.io, etc.).
+# Image is already pushed to GHCR by docker.yml. Manual trigger only until then.
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deploy target is not configured yet"
