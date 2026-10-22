@@ -1,12 +1,4 @@
 from fastapi import FastAPI
-ci/backend-workflow
-
-app = FastAPI()
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
@@ -21,10 +13,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.include_router(health.router)
-
 
 @app.get("/")
 def root():
     return {"name": settings.app_name}
+    
