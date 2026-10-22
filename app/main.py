@@ -28,4 +28,3 @@ app.include_router(health.router)
 @app.get("/")
 def root():
     return {"name": settings.app_name}
-  main
