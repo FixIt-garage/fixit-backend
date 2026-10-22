@@ -13,10 +13,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.include_router(health.router)
-
 
 @app.get("/")
 def root():
     return {"name": settings.app_name}
+    
