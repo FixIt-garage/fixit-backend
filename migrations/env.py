@@ -10,7 +10,8 @@ config = context.config
 
 # Use an explicitly passed URL (e.g. from tests), otherwise the app settings.
 if not config.get_main_option("sqlalchemy.url"):
-    config.set_main_option("sqlalchemy.url", settings.database_url)
+    # ConfigParser treats "%" as interpolation, so escape it (e.g. percent-encoded passwords).
+    config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name, disable_existing_loggers=False)
