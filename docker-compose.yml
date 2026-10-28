@@ -19,8 +19,17 @@ services:
   backend:
     build: .
     restart: unless-stopped
+    # App settings (APP_NAME, CORS_ORIGINS, ...) come from .env if it exists.
+    env_file:
+      - path: .env
+        required: false
+    # Container-specific values below override the ones from .env.
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-fixit}
+      DATABASE_URL: postgresql+psycopg://db:5432/${POSTGRES_DB:-fixit}
+      # Credentials go to libpq as PGUSER/PGPASSWORD instead of into the URL,
+      # so passwords with URL characters (e.g. "@", "/", "%") need no encoding.
+      PGUSER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "8000:8000"
     depends_on:
