@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     app_name: str = "FixIt API"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/fixit"
     cors_origins: list[str] = ["http://localhost:8081"]
-
+    jwt_algorithm: str = "HS256"
+    jwt_secret_key: str
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 30
 
 settings = Settings()
