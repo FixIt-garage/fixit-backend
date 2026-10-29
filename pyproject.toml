@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "email-validator>=2.3.0",
+    "alembic>=1.20.1",
     "fastapi>=0.152.0",
     "psycopg[binary]>=3.3.6",
     "pwdlib[argon2]>=0.3.1",
@@ -19,6 +20,10 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.1",
 ]
+
+# Only `app` is the installable package (`migrations/` and `tests/` are not).
+[tool.setuptools.packages.find]
+include = ["app*"]
 
 [tool.ruff]
 line-length = 100

@@ -63,6 +63,41 @@ docker build -t fixit-backend .
 docker run --rm -p 8000:8000 -e DATABASE_URL=postgresql+psycopg://postgres:postgres@host.docker.internal:5432/fixit fixit-backend
 ```
 
+### Running with Docker Compose (DB + backend)
+
+One command starts Postgres, applies migrations and runs the API with auto-reload:
+
+```bash
+cp .env.example .env   # once
+docker compose up --build
+```
+
+- API: http://localhost:8000, health check: http://localhost:8000/health
+- Postgres: `localhost:${POSTGRES_PORT}` (default `5432`). If the port is taken, set
+  `POSTGRES_PORT` (and the port in `DATABASE_URL`) in `.env`.
+- Data is kept in the `db_data` volume. Wipe it with `docker compose down -v`.
+
+### Database migrations (Alembic)
+
+Migrations live in `migrations/versions`. With compose they are applied automatically on start.
+
+```bash
+# after changing models in app/models: generate a migration, review it, then apply
+docker compose exec backend alembic revision --autogenerate -m "short description"
+docker compose exec backend alembic upgrade head
+
+# check that models and migrations are in sync
+docker compose exec backend alembic check
+```
+
+Without Docker: `uv run alembic upgrade head` (uses `DATABASE_URL` from `.env`).
+
+### Dev seed data
+
+```bash
+docker compose exec backend python -m app.seed
+```
+
 ### Environment variables
 
 | Variable       | Description                          | Default                                                       |
@@ -70,6 +105,8 @@ docker run --rm -p 8000:8000 -e DATABASE_URL=postgresql+psycopg://postgres:postg
 | `APP_NAME`     | API title shown in docs              | `FixIt API`                                                   |
 | `DATABASE_URL` | Postgres connection string           | `postgresql+psycopg://postgres:postgres@localhost:5432/fixit` |
 | `CORS_ORIGINS` | Allowed origins as a JSON list       | `["http://localhost:8081"]`                                   |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Postgres container credentials (compose) | `postgres` / `postgres` / `fixit` |
+| `POSTGRES_PORT` | Host port of the Postgres container (compose) | `5432` |
 
 ## CI/CD secrets
 
