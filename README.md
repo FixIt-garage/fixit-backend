@@ -83,9 +83,10 @@ docker run --rm -p 8000:8000 \
 One command starts Postgres, applies migrations and runs the API with auto-reload:
 
 ```bash
-cp .env.example .env   # once
+cp .env.example .env
 docker compose up --build
 ```
+Generate a JWT secret key using the command from the Configure environment section and set it as `JWT_SECRET_KEY` in `.env` before starting the services.
 
 - API: http://localhost:8000, health check: http://localhost:8000/health
 - Postgres: `localhost:${POSTGRES_PORT}` (default `5432`). If the port is taken, set
