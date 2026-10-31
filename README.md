@@ -28,7 +28,19 @@ cp .env.example .env
 Copy-Item .env.example .env
 ```
 
-The defaults work with the local Postgres container below.
+Generate a secure JWT secret key:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Copy the generated value into `.env`, replacing the empty `JWT_SECRET_KEY`:
+
+```env
+JWT_SECRET_KEY=your-generated-secret-key
+```
+
+Use a different key for each environment. Never commit `.env` or share your secret key.
 
 ### 3. Start Postgres
 
@@ -60,7 +72,10 @@ uv run ruff format .
 
 ```bash
 docker build -t fixit-backend .
-docker run --rm -p 8000:8000 -e DATABASE_URL=postgresql+psycopg://postgres:postgres@host.docker.internal:5432/fixit fixit-backend
+docker run --rm -p 8000:8000 \
+  -e DATABASE_URL=postgresql+psycopg://postgres:postgres@host.docker.internal:5432/fixit \
+  -e JWT_SECRET_KEY=your-generated-secret-key \
+  fixit-backend
 ```
 
 ### Running with Docker Compose (DB + backend)
@@ -68,9 +83,10 @@ docker run --rm -p 8000:8000 -e DATABASE_URL=postgresql+psycopg://postgres:postg
 One command starts Postgres, applies migrations and runs the API with auto-reload:
 
 ```bash
-cp .env.example .env   # once
+cp .env.example .env
 docker compose up --build
 ```
+Generate a JWT secret key using the command from the Configure environment section and set it as `JWT_SECRET_KEY` in `.env` before starting the services.
 
 - API: http://localhost:8000, health check: http://localhost:8000/health
 - Postgres: `localhost:${POSTGRES_PORT}` (default `5432`). If the port is taken, set
@@ -100,13 +116,17 @@ docker compose exec backend python -m app.seed
 
 ### Environment variables
 
-| Variable       | Description                          | Default                                                       |
-|----------------|--------------------------------------|---------------------------------------------------------------|
-| `APP_NAME`     | API title shown in docs              | `FixIt API`                                                   |
-| `DATABASE_URL` | Postgres connection string           | `postgresql+psycopg://postgres:postgres@localhost:5432/fixit` |
-| `CORS_ORIGINS` | Allowed origins as a JSON list       | `["http://localhost:8081"]`                                   |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Postgres container credentials (compose) | `postgres` / `postgres` / `fixit` |
-| `POSTGRES_PORT` | Host port of the Postgres container (compose) | `5432` |
+| Variable                                              | Description                                                                   | Default                                                       |
+|-------------------------------------------------------|-------------------------------------------------------------------------------|---------------------------------------------------------------|
+| `APP_NAME`                                            | API title shown in docs                                                       | `FixIt API`                                                   |
+| `DATABASE_URL`                                        | Postgres connection string                                                    | `postgresql+psycopg://postgres:postgres@localhost:5432/fixit` |
+| `CORS_ORIGINS`                                        | Allowed origins as a JSON list                                                | `["http://localhost:8081"]`                                   |
+| `JWT_SECRET_KEY`                                      | Secret key used to sign JWT tokens. Must be generated before starting the API | No default (required)                                                     |
+| `JWT_ALGORITHM`                                       | Algorithm used to sign JWT tokens                                             | `HS256`                                                       |
+| `ACCESS_TOKEN_EXPIRE_MINUTES`                         | Access token lifetime in minutes                                              | `15`                                                          |
+| `REFRESH_TOKEN_EXPIRE_DAYS`                           | Refresh token lifetime in days                                                | `30`                                                          |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Postgres container credentials (compose)                                      | `postgres` / `postgres` / `fixit`                             |
+| `POSTGRES_PORT`                                       | Host port of the Postgres container (compose)                                 | `5432`                                                        |
 
 ## CI/CD secrets
 
