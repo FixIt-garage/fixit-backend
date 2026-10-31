@@ -1,17 +1,12 @@
-from typing import Literal
 from pydantic import BaseModel, EmailStr, Field
-
-UserRole = Literal[
-    "client",
-    "master",
-    "service_center",
-    "volunteer_organization",
-]
+from app.models.user import UserRole
 
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
-    role: UserRole = "client"
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
+    role: UserRole = UserRole.CLIENT
 
 
 class LoginRequest(BaseModel):
@@ -28,6 +23,15 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
 
+class UserResponse(BaseModel):
+    id: int
+    email: EmailStr
+    first_name: str
+    last_name: str
+    role: UserRole
+    is_active: bool
+
+    model_config = {"from_attributes": True}
 
 class MessageResponse(BaseModel):
     message: str
