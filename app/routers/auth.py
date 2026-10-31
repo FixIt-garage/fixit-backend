@@ -1,10 +1,11 @@
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import decode_access_token, get_current_user
@@ -43,7 +44,7 @@ def _create_token_pair(user: User, db: Session) -> TokenResponse:
     payload = decode_token(refresh_token)
     expires_at = datetime.fromtimestamp(
         float(payload["exp"]),
-        tz=timezone.utc,
+        tz=UTC,
     )
 
     db.add(
@@ -85,7 +86,29 @@ def register(
     )
 
     db.add(user)
-    db.flush()
+
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+
+        original_error = exc.orig
+        constraint_name = getattr(
+            getattr(original_error, "diag", None),
+            "constraint_name",
+            None,
+        )
+
+        if (
+            getattr(original_error, "sqlstate", None) == "23505"
+            and constraint_name == "ix_users_email"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A user with this email already exists",
+            ) from exc
+
+        raise
 
     tokens = _create_token_pair(user, db)
     db.commit()
@@ -155,7 +178,7 @@ def refresh(
         .with_for_update()
     )
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     if (
         stored_token is None
@@ -195,7 +218,7 @@ def logout(
     )
 
     if stored_token is not None and stored_token.revoked_at is None:
-        stored_token.revoked_at = datetime.now(timezone.utc)
+        stored_token.revoked_at = datetime.now(UTC)
         db.commit()
 
     return MessageResponse(message="Successfully logged out")

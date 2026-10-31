@@ -1,5 +1,7 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 import jwt
+import pytest
 
 from app.config import settings
 from app.core.dependencies import decode_access_token
@@ -10,6 +12,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
+
 
 def test_password_hashing():
     password = "TestPassword123!"
@@ -36,20 +39,16 @@ def test_refresh_token():
     assert payload["sub"] == "user-123"
     assert payload["type"] == "refresh"
 
-
 def test_expired_token_rejected():
     expired_token = jwt.encode(
         {
             "sub": "user-123",
             "type": "access",
-            "exp": datetime.now(timezone.utc) - timedelta(minutes=1),
+            "exp": datetime.now(UTC) - timedelta(minutes=1),
         },
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
     )
 
-    try:
+    with pytest.raises(jwt.ExpiredSignatureError):
         decode_token(expired_token)
-        assert False, "Expired token should be rejected"
-    except jwt.ExpiredSignatureError:
-        pass

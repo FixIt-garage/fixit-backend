@@ -27,7 +27,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/fixit_test
-
+      JWT_SECRET_KEY: "ci-only-test-key-not-for-production-123456789"
     steps:
       - uses: actions/checkout@v4
 

@@ -1,12 +1,11 @@
-from uuid import uuid4
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import uuid4
 
 import jwt
 from pwdlib import PasswordHash
 
 from app.config import settings
-
 
 password_hash = PasswordHash.recommended()
 
@@ -24,7 +23,7 @@ def verify_password(password: str, hashed_password: str) -> bool:
 
 def create_access_token(subject: str) -> str:
     """Create a short-lived JWT access token with a unique identifier."""
-    expires_at = datetime.now(timezone.utc) + timedelta(
+    expires_at = datetime.now(UTC) + timedelta(
         minutes=settings.access_token_expire_minutes
     )
     payload: dict[str, Any] = {
@@ -43,7 +42,7 @@ def create_access_token(subject: str) -> str:
 
 def create_refresh_token(subject: str) -> str:
     """Create a long-lived JWT refresh token."""
-    expires_at = datetime.now(timezone.utc) + timedelta(
+    expires_at = datetime.now(UTC) + timedelta(
         days=settings.refresh_token_expire_days
     )
     payload: dict[str, Any] = {

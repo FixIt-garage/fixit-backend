@@ -1,13 +1,14 @@
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Enum as SQLAlchemyEnum, String, func
+from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     CLIENT = "client"
     MASTER = "master"
     SERVICE_CENTER = "service_center"
