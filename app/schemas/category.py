@@ -5,7 +5,8 @@ class CategoryRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    slug: str
-    name_uk: str
+    name: str
+    slug: str | None
+    name_uk: str | None
     parent_id: int | None
     sort_order: int

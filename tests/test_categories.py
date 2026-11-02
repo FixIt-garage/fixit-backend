@@ -6,8 +6,8 @@ from sqlalchemy.pool import StaticPool
 
 from app.db import get_db
 from app.main import app
+from app.models import Category
 from app.models.base import Base
-from app.models.category import Category
 
 
 @pytest.fixture
@@ -27,11 +27,19 @@ def client():
     app.dependency_overrides[get_db] = override_get_db
 
     with session_factory() as db:
-        appliances = Category(slug="appliances", name_uk="Побутова техніка", sort_order=2)
-        db.add_all([appliances, Category(slug="electrics", name_uk="Електрика", sort_order=1)])
+        appliances = Category(
+            name="appliances", slug="appliances", name_uk="Побутова техніка", sort_order=2
+        )
+        db.add_all(
+            [
+                appliances,
+                Category(name="electrics", slug="electrics", name_uk="Електрика", sort_order=1),
+            ]
+        )
         db.flush()
         db.add(
             Category(
+                name="washing-machines",
                 slug="washing-machines",
                 name_uk="Пральні машини",
                 parent_id=appliances.id,
