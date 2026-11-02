@@ -1,13 +1,14 @@
 import enum
 from datetime import datetime
-from typing import Optional
-from sqlalchemy import String, Text, ForeignKey, Enum as SQLEnum, DateTime
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
 
 
-class IssueStatus(str, enum.Enum):
+class IssueStatus(enum.StrEnum):
     OPEN = "open"
     IN_PROGRESS = "in_progress"
     RESOLVED = "resolved"
@@ -28,11 +29,11 @@ class Issue(Base):
         nullable=False
     )
 
-    address: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

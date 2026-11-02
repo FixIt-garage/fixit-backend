@@ -1,3 +1,3 @@
-from app.schemas.issue import IssueCreate, IssueUpdate, IssueRead
+from app.schemas.issue import IssueCreate, IssueRead, IssueUpdate
 
 __all__ = ["IssueCreate", "IssueUpdate", "IssueRead"]

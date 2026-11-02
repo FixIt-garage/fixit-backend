@@ -25,7 +25,11 @@ def upgrade() -> None:
     sa.Column('title', sa.String(length=255), nullable=False),
     sa.Column('description', sa.Text(), nullable=False),
     sa.Column('category', sa.String(length=100), nullable=False),
-    sa.Column('status', sa.Enum('OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', name='issuestatus'), nullable=False),
+    sa.Column(
+        'status',
+        sa.Enum('OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED', name='issuestatus'),
+        nullable=False,
+    ),
     sa.Column('address', sa.String(length=255), nullable=True),
     sa.Column('owner_id', sa.Integer(), nullable=False),
     sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
