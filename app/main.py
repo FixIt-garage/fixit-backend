@@ -1,10 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from app.exception_handlers import register_exception_handlers
 from app.config import settings
 from app.routers import auth, categories, health, issues
 
+
 app = FastAPI(title=settings.app_name)
+register_exception_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
