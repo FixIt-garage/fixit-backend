@@ -224,27 +224,80 @@ def test_seed_migration_keeps_ids_and_fills_categories_api() -> None:
             engine.dispose()
 
 
+def _insert_legacy_categories(engine, names: list[str]) -> dict[str, int]:
+    """Insert categories as the old app/seed.py did: only `name`, no slug or name_uk."""
+    with engine.begin() as conn:
+        for name in names:
+            conn.execute(text("INSERT INTO categories (name) VALUES (:name)"), {"name": name})
+        return dict(conn.execute(text("SELECT name, id FROM categories")).all())
+
+
 @requires_db
-def test_seed_migration_downgrade_keeps_categories_used_by_services() -> None:
+def test_seed_downgrade_keeps_existing_categories() -> None:
     with disposable_database() as url:
         _assert_connected_to(url)
         config = _alembic_config(url)
         command.upgrade(config, PRE_SEED_REVISION)
         engine = create_engine(url)
         try:
+            legacy = _insert_legacy_categories(engine, ["Електрика", "Сантехніка"])
             with engine.begin() as conn:
-                conn.execute(text("INSERT INTO categories (name) VALUES ('Електрика')"))
-                category_id = conn.execute(text("SELECT id FROM categories")).scalar_one()
                 conn.execute(
                     text("INSERT INTO services (category_id, name) VALUES (:id, 'Заміна розетки')"),
-                    {"id": category_id},
+                    {"id": legacy["Електрика"]},
                 )
 
             command.upgrade(config, "head")
             command.downgrade(config, PRE_SEED_REVISION)
 
             with engine.connect() as conn:
-                rows = conn.execute(text("SELECT id, name, slug FROM categories")).all()
-            assert [(r.id, r.name, r.slug) for r in rows] == [(category_id, "Електрика", None)]
+                rows = conn.execute(
+                    text(
+                        "SELECT id, name, slug FROM categories "
+                        "WHERE name IN ('Електрика', 'Сантехніка')"
+                    )
+                ).all()
+                linked = conn.execute(text("SELECT category_id FROM services")).scalars().all()
+            # Both pre-existing rows keep their id, with or without services.
+            assert {row.name: row.id for row in rows} == legacy
+            assert all(row.slug is None for row in rows)
+            assert linked == [legacy["Електрика"]]
+        finally:
+            engine.dispose()
+
+
+@requires_db
+def test_seed_downgrade_works_with_extra_child_categories() -> None:
+    with disposable_database() as url:
+        _assert_connected_to(url)
+        config = _alembic_config(url)
+        command.upgrade(config, "head")
+        engine = create_engine(url)
+        try:
+            with engine.begin() as conn:
+                ids = dict(conn.execute(text("SELECT slug, id FROM categories")).all())
+                conn.execute(
+                    text(
+                        "INSERT INTO categories (name, slug, name_uk, parent_id, sort_order) "
+                        "VALUES ('Духовки', 'ovens', 'Духовки', :appliances, 3), "
+                        "('Фільтри', 'filters', 'Фільтри', :washing, 1)"
+                    ),
+                    {"appliances": ids["appliances"], "washing": ids["washing-machines"]},
+                )
+
+            # Children outside the seed must not make the rollback fail on ON DELETE RESTRICT.
+            command.downgrade(config, PRE_SEED_REVISION)
+
+            with engine.connect() as conn:
+                by_name = dict(conn.execute(text("SELECT name, id FROM categories")).all())
+                parents = dict(
+                    conn.execute(
+                        text("SELECT name, parent_id FROM categories WHERE parent_id IS NOT NULL")
+                    ).all()
+                )
+            assert parents == {
+                "Духовки": by_name["Побутова техніка"],
+                "Фільтри": by_name["Пральні машини"],
+            }
         finally:
             engine.dispose()

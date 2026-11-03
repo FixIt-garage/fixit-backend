@@ -59,15 +59,6 @@ def _upsert(conn, name: str, slug: str, parent_id: int | None, sort_order: int) 
     return conn.execute(query).scalar_one()
 
 
-def _delete_unused(conn, slugs: list[str]) -> None:
-    """Delete seeded categories that no service references."""
-    stmt = sa.text(
-        "DELETE FROM categories WHERE slug IN :slugs "
-        "AND NOT EXISTS (SELECT 1 FROM services WHERE services.category_id = categories.id)"
-    ).bindparams(sa.bindparam("slugs", expanding=True))
-    conn.execute(stmt, {"slugs": slugs})
-
-
 def upgrade() -> None:
     conn = op.get_bind()
     ids = {slug: _upsert(conn, name, slug, None, order) for name, slug, order in ROOTS}
@@ -76,15 +67,13 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Conservative on purpose: nothing is deleted. Rows that existed before this migration
+    # (matched by name) and rows created by it all stay, so ids, services and child
+    # categories are never lost and ON DELETE RESTRICT cannot make the rollback fail.
+    # Only the fields filled by the seed are cleared.
     conn = op.get_bind()
-    _delete_unused(conn, CHILD_SLUGS)
-    conn.execute(
-        categories.update().where(categories.c.slug.in_(CHILD_SLUGS)).values(parent_id=None)
-    )
-    _delete_unused(conn, ROOT_SLUGS)
-    # Categories still used by services stay, but lose the seeded fields.
     conn.execute(
         categories.update()
         .where(categories.c.slug.in_(ROOT_SLUGS + CHILD_SLUGS))
-        .values(slug=None, name_uk=None, sort_order=0)
+        .values(slug=None, name_uk=None, parent_id=None, sort_order=0)
     )
