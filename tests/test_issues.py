@@ -167,3 +167,22 @@ def test_create_issue_without_category_id_is_rejected(client: TestClient, payloa
     response = client.post("/issues", json=body, headers=auth_headers(client))
 
     assert response.status_code == 422
+
+def test_create_issue_description_at_max_length_is_accepted(
+    client: TestClient, payload: dict
+) -> None:
+    body = {**payload, "description": "x" * 500}
+
+    response = client.post("/issues", json=body, headers=auth_headers(client))
+
+    assert response.status_code == 201
+
+
+def test_create_issue_description_over_max_length_is_rejected(
+    client: TestClient, payload: dict
+) -> None:
+    body = {**payload, "description": "x" * 501}
+
+    response = client.post("/issues", json=body, headers=auth_headers(client))
+
+    assert response.status_code == 422
