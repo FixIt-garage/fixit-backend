@@ -131,6 +131,9 @@ def test_migration_round_trip_leaves_other_databases_untouched() -> None:
         try:
             with control.begin() as conn:
                 conn.execute(text("INSERT INTO categories (name) VALUES ('control')"))
+                before = (
+                    conn.execute(text("SELECT name FROM categories ORDER BY id")).scalars().all()
+                )
 
             with disposable_database() as temp_url:
                 temp_name = temp_url.database
@@ -140,7 +143,108 @@ def test_migration_round_trip_leaves_other_databases_untouched() -> None:
             assert not _database_exists(temp_name)
             assert _database_exists(control_url.database)
             with control.connect() as conn:
-                names = conn.execute(text("SELECT name FROM categories")).scalars().all()
-            assert names == ["control"]
+                names = (
+                    conn.execute(text("SELECT name FROM categories ORDER BY id")).scalars().all()
+                )
+            # The migration of the other database must not change this one.
+            assert names == before
+            assert "control" in names
         finally:
             control.dispose()
+
+
+PRE_SEED_REVISION = "e3b46f671fc0"
+
+
+@requires_db
+def test_seed_migration_keeps_ids_and_fills_categories_api() -> None:
+    from fastapi.testclient import TestClient
+    from sqlalchemy.orm import sessionmaker
+
+    from app.db import get_db
+    from app.main import app
+
+    with disposable_database() as url:
+        _assert_connected_to(url)
+        config = _alembic_config(url)
+        command.upgrade(config, PRE_SEED_REVISION)
+        engine = create_engine(url)
+        try:
+            # Rows as the old app/seed.py created them: only `name`, no slug / name_uk.
+            with engine.begin() as conn:
+                conn.execute(
+                    text("INSERT INTO categories (name) VALUES ('Електрика'), ('Сантехніка')")
+                )
+                legacy = dict(conn.execute(text("SELECT name, id FROM categories")).all())
+                conn.execute(
+                    text("INSERT INTO services (category_id, name) VALUES (:id, 'Заміна розетки')"),
+                    {"id": legacy["Електрика"]},
+                )
+
+            command.upgrade(config, "head")
+
+            factory = sessionmaker(bind=engine)
+
+            def override_get_db():
+                with factory() as db:
+                    yield db
+
+            app.dependency_overrides[get_db] = override_get_db
+            try:
+                items = TestClient(app).get("/categories").json()
+            finally:
+                app.dependency_overrides.clear()
+
+            by_slug = {item["slug"]: item for item in items}
+            assert len(items) == 7
+            assert all(item["slug"] and item["name_uk"] for item in items)
+            # Existing categories keep their ids, so services stay linked.
+            assert by_slug["electrics"]["id"] == legacy["Електрика"]
+            assert by_slug["plumbing"]["id"] == legacy["Сантехніка"]
+            # Sub-categories point to their parent.
+            assert by_slug["washing-machines"]["parent_id"] == by_slug["appliances"]["id"]
+            assert by_slug["refrigerators"]["parent_id"] == by_slug["appliances"]["id"]
+            assert by_slug["appliances"]["parent_id"] is None
+            # The API result is ordered by sort_order.
+            orders = [item["sort_order"] for item in items]
+            assert orders == sorted(orders)
+            with engine.connect() as conn:
+                linked = (
+                    conn.execute(
+                        text(
+                            "SELECT c.slug FROM services s "
+                            "JOIN categories c ON c.id = s.category_id"
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+            assert linked == ["electrics"]
+        finally:
+            engine.dispose()
+
+
+@requires_db
+def test_seed_migration_downgrade_keeps_categories_used_by_services() -> None:
+    with disposable_database() as url:
+        _assert_connected_to(url)
+        config = _alembic_config(url)
+        command.upgrade(config, PRE_SEED_REVISION)
+        engine = create_engine(url)
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("INSERT INTO categories (name) VALUES ('Електрика')"))
+                category_id = conn.execute(text("SELECT id FROM categories")).scalar_one()
+                conn.execute(
+                    text("INSERT INTO services (category_id, name) VALUES (:id, 'Заміна розетки')"),
+                    {"id": category_id},
+                )
+
+            command.upgrade(config, "head")
+            command.downgrade(config, PRE_SEED_REVISION)
+
+            with engine.connect() as conn:
+                rows = conn.execute(text("SELECT id, name, slug FROM categories")).all()
+            assert [(r.id, r.name, r.slug) for r in rows] == [(category_id, "Електрика", None)]
+        finally:
+            engine.dispose()
