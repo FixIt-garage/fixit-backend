@@ -104,3 +104,21 @@ def test_create_issue_without_description_is_rejected(client: TestClient) -> Non
     response = client.post("/issues", json=payload, headers=auth_headers(client))
 
     assert response.status_code == 422
+
+
+def test_create_issue_with_whitespace_only_title_is_rejected(client: TestClient) -> None:
+    payload = {**ISSUE_PAYLOAD, "title": "   "}
+
+    response = client.post("/issues", json=payload, headers=auth_headers(client))
+
+    assert response.status_code == 422
+
+
+def test_create_issue_strips_surrounding_whitespace(client: TestClient) -> None:
+    payload = {**ISSUE_PAYLOAD, "title": "  Leaking tap  ", "description": "\tNo water\n"}
+
+    response = client.post("/issues", json=payload, headers=auth_headers(client))
+
+    assert response.status_code == 201
+    assert response.json()["title"] == "Leaking tap"
+    assert response.json()["description"] == "No water"

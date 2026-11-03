@@ -13,15 +13,14 @@ class IssueBase(BaseModel):
 
 
 class IssueCreate(IssueBase):
-    pass
+    model_config = ConfigDict(str_strip_whitespace=True)
 
 
 class IssueUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     title: str | None = Field(None, min_length=1, max_length=255)
-    description: str | None = Field(None, min_length=1)
-    category: str | None = Field(None, min_length=1, max_length=100)
-    status: IssueStatus | None = None
-    address: str | None = Field(None, max_length=255)
+    ...
 
 
 class IssueRead(IssueBase):
