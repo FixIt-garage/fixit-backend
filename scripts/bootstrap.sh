@@ -45,10 +45,19 @@ jwt_value() {
       sub(/^[^=]*=/, "", raw)
       sub(/\r$/, "", raw)
       v = raw
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
-      if (v ~ /^".*"$/ || v ~ ("^" q ".*" q "$")) {
-        v = substr(v, 2, length(v) - 2)
-      } else {
+      sub(/^[[:space:]]+/, "", v)
+      quoted = 0
+      c = substr(v, 1, 1)
+      if (c == "\"" || c == q) {
+        # Quoted: the value ends at the closing quote; only spaces or a comment may follow.
+        rest = substr(v, 2)
+        end = index(rest, c)
+        if (end > 0 && substr(rest, end + 1) ~ /^[[:space:]]*(#.*)?$/) {
+          v = substr(rest, 1, end - 1)
+          quoted = 1
+        }
+      }
+      if (!quoted) {
         # Unquoted: " #..." (a # after whitespace) starts a comment.
         v = raw
         sub(/[[:space:]]+#.*$/, "", v)

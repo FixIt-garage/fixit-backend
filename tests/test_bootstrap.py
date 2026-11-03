@@ -75,6 +75,8 @@ def test_creates_env_with_generated_key_and_keeps_it(repo: Path, runner: list[st
         'JWT_SECRET_KEY="existing_secret"',
         "JWT_SECRET_KEY='existing_secret'",
         "JWT_SECRET_KEY=existing_secret # comment",
+        'JWT_SECRET_KEY="existing_secret" # comment',
+        "JWT_SECRET_KEY='existing_secret' # comment",
     ],
 )
 def test_keeps_existing_key_in_any_format(repo: Path, runner: list[str], assignment: str) -> None:
@@ -96,6 +98,8 @@ def test_keeps_existing_key_in_any_format(repo: Path, runner: list[str], assignm
         "JWT_SECRET_KEY=''",
         "JWT_SECRET_KEY = ",
         "JWT_SECRET_KEY= # no value yet",
+        'JWT_SECRET_KEY="" # fill me',
+        "JWT_SECRET_KEY='' # fill me",
     ],
 )
 def test_fills_empty_key(repo: Path, runner: list[str], assignment: str) -> None:

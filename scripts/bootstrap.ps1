@@ -34,10 +34,13 @@ $JwtLinePattern = '^\s*(export\s+)?JWT_SECRET_KEY\s*='
 # Value of an assignment line without surrounding spaces, quotes or an inline comment.
 function Get-EnvValue([string]$Line) {
     $raw = $Line -replace '^[^=]*=', ''
-    $value = $raw.Trim()
-    if ($value.Length -ge 2 -and (($value.StartsWith('"') -and $value.EndsWith('"')) -or
-            ($value.StartsWith("'") -and $value.EndsWith("'")))) {
-        return $value.Substring(1, $value.Length - 2).Trim()
+    $value = $raw.TrimStart()
+    if ($value.StartsWith('"') -or $value.StartsWith("'")) {
+        # Quoted: the value ends at the closing quote; only spaces or a comment may follow.
+        $end = $value.IndexOf($value[0], 1)
+        if ($end -gt 0 -and $value.Substring($end + 1) -match '^\s*(#.*)?$') {
+            return $value.Substring(1, $end - 1).Trim()
+        }
     }
     # Unquoted: " #..." (a # after whitespace) starts a comment.
     return ($raw -replace '\s+#.*$', '').Trim()
