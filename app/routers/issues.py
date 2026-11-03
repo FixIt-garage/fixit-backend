@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user
@@ -18,4 +18,7 @@ def create_issue(
     current_user: User = Depends(get_current_user),
 ) -> Issue:
     """Create an issue owned by the current user."""
-    return issue_service.create_issue(db, data, current_user)
+    try:
+        return issue_service.create_issue(db, data, current_user)
+    except issue_service.CategoryNotFoundError as exc:
+        raise HTTPException(status_code=422, detail="Category not found") from exc
