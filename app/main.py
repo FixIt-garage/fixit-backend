@@ -19,6 +19,7 @@ app.include_router(categories.router)
 app.include_router(issues.router)
 
 
+
 @app.get("/")
 def root():
     return {"name": settings.app_name}

@@ -98,9 +98,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("master_id", "service_id"),
     )
 
-    order_status = sa.Enum(
-        "pending", "in_progress", "completed", "cancelled", name="order_status"
-    )
+    order_status = sa.Enum("pending", "in_progress", "completed", "cancelled", name="order_status")
     op.create_table(
         "orders",
         sa.Column("id", sa.Integer(), nullable=False),
