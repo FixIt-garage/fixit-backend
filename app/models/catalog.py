@@ -17,7 +17,7 @@ class Category(Base):
     sort_order: Mapped[int] = mapped_column(default=0, server_default="0")
 
     parent = relationship("Category", remote_side=[id], back_populates="children")
-    children = relationship("Category", back_populates="parent")
+    children = relationship("Category", back_populates="parent", passive_deletes="all")
 
 
 class Service(Base):
