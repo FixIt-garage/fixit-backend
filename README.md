@@ -1,6 +1,40 @@
 # fixit-backend
 FastAPI backend
 
+## Quick start
+
+Requires only [Git](https://git-scm.com/) and [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running).
+
+```bash
+git clone https://github.com/FixIt-garage/fixit-backend.git
+cd fixit-backend
+
+# Windows (PowerShell)
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1
+
+# macOS / Linux
+./scripts/bootstrap.sh
+```
+
+The script creates `.env` (with a generated `JWT_SECRET_KEY`), builds and starts Postgres and the API,
+applies migrations and waits until http://localhost:8000/health is OK.
+Add `-Seed` (PowerShell) or `--seed` (bash) to also load dev seed data.
+It is safe to run again: an existing `.env` is kept, only an empty `JWT_SECRET_KEY` is filled in.
+
+Stop everything with `docker compose down` (add `-v` to also delete the database).
+
+### Troubleshooting
+
+- **Docker is not running**: start Docker Desktop and wait for "Engine running", then run the script again.
+- **`port is already allocated`**: port 5432 or 8000 is taken. For Postgres, set `POSTGRES_PORT=5433`
+  in `.env` (and the port in `DATABASE_URL` if you run the API without Docker). For 8000, stop the
+  other app or container that uses it (`docker ps`).
+- **`running scripts is disabled on this system`**: start the script with
+  `powershell -ExecutionPolicy Bypass -File ...` as shown above.
+- **`Read timed out` while building**: the Python package download timed out. Run the script again.
+- **The API does not become healthy**: check `docker compose logs backend`. A database created with
+  other credentials needs `docker compose down -v` (this deletes local data).
+
 ## Running locally
 
 ### Prerequisites
