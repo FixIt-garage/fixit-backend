@@ -1,7 +1,7 @@
 """create issues table
 
 Revision ID: 968fca11f4b9
-Revises: 4c02736053a1
+Revises: a7c91d5e3b20
 Create Date: 2026-10-29 16:31:47.404489
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '968fca11f4b9'
-down_revision: str | None = '4c02736053a1'
+down_revision: str | None = 'a7c91d5e3b20'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
