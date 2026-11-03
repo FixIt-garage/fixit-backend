@@ -26,6 +26,23 @@ function Stop-WithError([string]$Message) {
     Write-Host "`nERROR: $Message" -ForegroundColor Red
     exit 1
 }
+
+# A JWT_SECRET_KEY assignment as docker compose / python-dotenv accept it:
+# optional "export", spaces around the key and "=".
+$JwtLinePattern = '^\s*(export\s+)?JWT_SECRET_KEY\s*='
+
+# Value of an assignment line without surrounding spaces, quotes or an inline comment.
+function Get-EnvValue([string]$Line) {
+    $raw = $Line -replace '^[^=]*=', ''
+    $value = $raw.Trim()
+    if ($value.Length -ge 2 -and (($value.StartsWith('"') -and $value.EndsWith('"')) -or
+            ($value.StartsWith("'") -and $value.EndsWith("'")))) {
+        return $value.Substring(1, $value.Length - 2).Trim()
+    }
+    # Unquoted: " #..." (a # after whitespace) starts a comment.
+    return ($raw -replace '\s+#.*$', '').Trim()
+}
+
 function New-Secret {
     $bytes = New-Object byte[] 32
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
@@ -50,17 +67,21 @@ try {
     $envPath = Join-Path $root '.env'
     if (Test-Path $envPath) {
         Write-Host '.env already exists, keeping it.'
-        $lines = @(Get-Content -LiteralPath $envPath)
+        # Explicit UTF-8: Windows PowerShell 5.1 would read a file without BOM as ANSI.
+        $lines = @(Get-Content -LiteralPath $envPath -Encoding UTF8)
     } else {
-        $lines = @(Get-Content -LiteralPath (Join-Path $root '.env.example'))
+        $lines = @(Get-Content -LiteralPath (Join-Path $root '.env.example') -Encoding UTF8)
         Write-Host 'Creating .env from .env.example.'
     }
-    $keyLine = $lines | Where-Object { $_ -match '^JWT_SECRET_KEY=' } | Select-Object -First 1
+    # The last assignment wins, as in docker compose and python-dotenv.
+    $keyLines = @($lines | Where-Object { $_ -cmatch $JwtLinePattern })
+    $currentKey = if ($keyLines.Count -gt 0) { Get-EnvValue $keyLines[-1] } else { '' }
     $changed = -not (Test-Path $envPath)
-    if (-not $keyLine -or $keyLine -match '^JWT_SECRET_KEY=\s*$') {
+    if (-not $currentKey) {
         $newLine = "JWT_SECRET_KEY=$(New-Secret)"
-        if ($keyLine) {
-            $lines = $lines | ForEach-Object { if ($_ -match '^JWT_SECRET_KEY=') { $newLine } else { $_ } }
+        if ($keyLines.Count -gt 0) {
+            # Replace every (empty) assignment, keep all other lines as they are.
+            $lines = @($lines | ForEach-Object { if ($_ -cmatch $JwtLinePattern) { $newLine } else { $_ } })
         } else {
             $lines += @('', $newLine)
         }

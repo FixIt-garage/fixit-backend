@@ -32,6 +32,34 @@ fail() {
 
 new_secret() { od -An -tx1 -N32 /dev/urandom | tr -d ' \n'; }
 
+# A JWT_SECRET_KEY assignment as docker compose / python-dotenv accept it:
+# optional "export", spaces around the key and "=".
+JWT_LINE='^[[:space:]]*(export[[:space:]]+)?JWT_SECRET_KEY[[:space:]]*='
+
+# Prints the effective JWT_SECRET_KEY value from .env (the last assignment wins), without
+# surrounding spaces, quotes or an inline comment. Prints nothing if it is missing or empty.
+jwt_value() {
+  awk -v q="'" -v pat="$JWT_LINE" '
+    $0 ~ pat {
+      raw = $0
+      sub(/^[^=]*=/, "", raw)
+      sub(/\r$/, "", raw)
+      v = raw
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      if (v ~ /^".*"$/ || v ~ ("^" q ".*" q "$")) {
+        v = substr(v, 2, length(v) - 2)
+      } else {
+        # Unquoted: " #..." (a # after whitespace) starts a comment.
+        v = raw
+        sub(/[[:space:]]+#.*$/, "", v)
+      }
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+      val = v
+    }
+    END { printf "%s", val }
+  ' .env
+}
+
 step "Checking Docker"
 command -v docker >/dev/null 2>&1 ||
   fail "Docker is not installed. Install Docker Desktop: https://www.docker.com/products/docker-desktop/"
@@ -45,11 +73,13 @@ else
   cp .env.example .env
   echo "Created .env from .env.example."
 fi
-if ! grep -Eq '^JWT_SECRET_KEY=[^[:space:]]' .env; then
+if [ -z "$(jwt_value)" ]; then
   secret="$(new_secret)"
-  if grep -Eq '^JWT_SECRET_KEY=' .env; then
+  if grep -Eq "$JWT_LINE" .env; then
+    # Replace every (empty) assignment, keep all other lines byte for byte.
     tmp="$(mktemp)"
-    sed "s/^JWT_SECRET_KEY=.*/JWT_SECRET_KEY=${secret}/" .env >"$tmp" && cat "$tmp" >.env
+    awk -v pat="$JWT_LINE" -v line="JWT_SECRET_KEY=${secret}" \
+      '$0 ~ pat { print line; next } { print }' .env >"$tmp" && cat "$tmp" >.env
     rm -f "$tmp"
   else
     printf '\nJWT_SECRET_KEY=%s\n' "$secret" >>.env
