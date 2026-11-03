@@ -6,7 +6,7 @@ FastAPI backend
 Requires only [Git](https://git-scm.com/) and [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running).
 
 ```bash
-git clone https://github.com/FixIt-garage/fixit-backend.git
+git clone --branch develop https://github.com/FixIt-garage/fixit-backend.git
 cd fixit-backend
 
 # Windows (PowerShell)
@@ -20,6 +20,7 @@ The script creates `.env` (with a generated `JWT_SECRET_KEY`), builds and starts
 applies migrations and waits until http://localhost:8000/health is OK.
 Add `-Seed` (PowerShell) or `--seed` (bash) to also load dev seed data.
 It is safe to run again: an existing `.env` is kept, only an empty `JWT_SECRET_KEY` is filled in.
+Use the `develop` branch: it is where the bootstrap scripts live until they reach `main`.
 
 Stop everything with `docker compose down` (add `-v` to also delete the database).
 
