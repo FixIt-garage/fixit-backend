@@ -42,3 +42,14 @@ def list_issues(
 
     query = query.order_by(Issue.created_at.desc(), Issue.id.desc()).limit(limit).offset(offset)
     return list(db.scalars(query))
+
+
+def get_issue(db: Session, issue_id: int, owner: User) -> Issue | None:
+    """Return the owner's non-deleted issue by id, or None if there is no such issue."""
+    return db.scalar(
+        select(Issue).where(
+            Issue.id == issue_id,
+            Issue.owner_id == owner.id,
+            Issue.deleted_at.is_(None),
+        )
+    )

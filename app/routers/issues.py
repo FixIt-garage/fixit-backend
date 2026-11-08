@@ -44,3 +44,16 @@ def list_issues(
         status=status_filter,
         category_id=category_id,
     )
+
+
+@router.get("/{issue_id}", response_model=IssueRead)
+def get_issue(
+    issue_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Issue:
+    """Return one of the current user's issues."""
+    issue = issue_service.get_issue(db, issue_id, current_user)
+    if issue is None:
+        raise HTTPException(status_code=404, detail="Issue not found")
+    return issue
