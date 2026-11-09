@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, Integer, Sequence, String, func
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,8 +25,13 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
-    phone: Mapped[str | None] = mapped_column(String(32))
+    phone: Mapped[str | None] = mapped_column(String(32), unique=True)
     address: Mapped[str | None] = mapped_column(String(255))
+    city: Mapped[str | None] = mapped_column(String(100))
+    avatar_url: Mapped[str | None] = mapped_column(String(500))
+    public_id: Mapped[int] = mapped_column(
+        Integer, Sequence("users_public_id_seq", start=1000), unique=True
+    )
 
     role: Mapped[UserRole] = mapped_column(
         SQLAlchemyEnum(

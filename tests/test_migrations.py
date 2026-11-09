@@ -301,3 +301,45 @@ def test_seed_downgrade_works_with_extra_child_categories() -> None:
             }
         finally:
             engine.dispose()
+
+
+@requires_db
+def test_user_profile_migration_fills_public_id_for_existing_users() -> None:
+    with disposable_database() as url:
+        _assert_connected_to(url)
+        config = _alembic_config(url)
+        command.upgrade(config, "968fca11f4b9")
+        engine = create_engine(url)
+        try:
+            with engine.begin() as conn:
+                for email in ("first@example.com", "second@example.com"):
+                    conn.execute(
+                        text(
+                            "INSERT INTO users (email, password_hash, first_name, last_name) "
+                            "VALUES (:email, 'hash', 'Test', 'User')"
+                        ),
+                        {"email": email},
+                    )
+
+            command.upgrade(config, "head")
+
+            with engine.connect() as conn:
+                ids = conn.execute(text("SELECT public_id FROM users ORDER BY id")).scalars().all()
+            assert len(ids) == 2
+            assert len(set(ids)) == 2
+            assert min(ids) >= 1000
+
+            # A user created after the migration gets the next number automatically.
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "INSERT INTO users (email, password_hash, first_name, last_name) "
+                        "VALUES ('third@example.com', 'hash', 'Test', 'User')"
+                    )
+                )
+                last = conn.execute(
+                    text("SELECT public_id FROM users WHERE email = 'third@example.com'")
+                ).scalar_one()
+            assert last > max(ids)
+        finally:
+            engine.dispose()
