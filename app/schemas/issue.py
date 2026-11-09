@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.issue import IssueStatus
 
@@ -30,6 +31,15 @@ class IssueUpdate(BaseModel):
     category_id: int | None = Field(None, ge=1)
     status: IssueStatus | None = None
     address: str | None = Field(None, max_length=255)
+
+    @model_validator(mode="after")
+    def check_provided_fields(self) -> Self:
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided")
+        for name in ("title", "description", "category_id", "status"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                raise ValueError(f"{name} cannot be null")
+        return self
 
 
 class IssueRead(BaseModel):
