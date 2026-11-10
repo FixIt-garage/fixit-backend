@@ -45,14 +45,15 @@ def create_issue(
 
 
 def titles(response) -> list[str]:
-    return [item["title"] for item in response.json()]
+    return [item["title"] for item in response.json()["items"]]
 
 
 def test_list_is_empty_for_new_user(client: TestClient) -> None:
     response = client.get("/issues", headers=auth_headers(client))
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json()["items"] == []
+    assert response.json()["total"] == 0
 
 
 def test_list_returns_only_own_issues(client: TestClient, category_ids: list[int]) -> None:
@@ -85,7 +86,9 @@ def test_list_pagination_limit_and_offset(client: TestClient, category_ids: list
     page = client.get("/issues?limit=2&offset=2", headers=headers)
     assert titles(page) == ["issue-2", "issue-1"]
     assert titles(client.get("/issues?limit=2&offset=4", headers=headers)) == ["issue-0"]
-    assert client.get("/issues?offset=10", headers=headers).json() == []
+    page = client.get("/issues?offset=10", headers=headers).json()
+    assert page["items"] == []
+    assert page["total"] == 5
 
 
 def test_list_filter_by_status(

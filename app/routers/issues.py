@@ -8,6 +8,7 @@ from app.db import get_db
 from app.models.issue import Issue, IssueStatus
 from app.models.user import User
 from app.schemas.issue import IssueCreate, IssueRead, IssueUpdate
+from app.schemas.pagination import Page, PageParams
 from app.services import issue as issue_service
 
 router = APIRouter(prefix="/issues", tags=["Issues"])
@@ -36,23 +37,28 @@ def create_issue(
         raise HTTPException(status_code=422, detail="Category not found") from exc
 
 
-@router.get("", response_model=list[IssueRead])
+@router.get("", response_model=Page[IssueRead])
 def list_issues(
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    params: Annotated[PageParams, Depends()],
     status_filter: Annotated[IssueStatus | None, Query(alias="status")] = None,
     category_id: Annotated[int | None, Query(ge=1)] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> list[Issue]:
+) -> Page[IssueRead]:
     """List the current user's issues, newest first, with pagination and filters."""
-    return issue_service.list_issues(
+    items, total = issue_service.list_issues(
         db,
         current_user,
-        limit=limit,
-        offset=offset,
+        limit=params.limit,
+        offset=params.offset,
         status=status_filter,
         category_id=category_id,
+    )
+    return Page[IssueRead](
+        items=[IssueRead.model_validate(item) for item in items],
+        total=total,
+        limit=params.limit,
+        offset=params.offset,
     )
 
 
@@ -82,6 +88,7 @@ def update_issue(
         return issue_service.update_issue(db, issue, data)
     except issue_service.CategoryNotFoundError as exc:
         raise HTTPException(status_code=422, detail="Category not found") from exc
+
 
 @router.delete("/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_issue(
