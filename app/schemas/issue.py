@@ -1,17 +1,16 @@
 from datetime import datetime
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
 from app.models.issue import IssueStatus
+from app.schemas.base import BaseSchema, RequestSchema
 
 DESCRIPTION_MAX_LENGTH = 500
 
 
-class IssueCreate(BaseModel):
+class IssueCreate(RequestSchema):
     # Whitespace is stripped before the length checks, so "   " is rejected.
-    model_config = ConfigDict(str_strip_whitespace=True)
-
     title: str = Field(..., min_length=1, max_length=255, description="Назва проблеми")
     description: str = Field(
         ...,
@@ -23,9 +22,7 @@ class IssueCreate(BaseModel):
     address: str | None = Field(None, max_length=255, description="Адреса локації")
 
 
-class IssueUpdate(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True)
-
+class IssueUpdate(RequestSchema):
     title: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, min_length=1, max_length=DESCRIPTION_MAX_LENGTH)
     category_id: int | None = Field(None, ge=1)
@@ -42,9 +39,7 @@ class IssueUpdate(BaseModel):
         return self
 
 
-class IssueRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class IssueRead(BaseSchema):
     id: int
     title: str
     description: str
