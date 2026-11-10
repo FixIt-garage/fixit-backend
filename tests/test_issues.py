@@ -84,16 +84,17 @@ def test_create_issue_is_saved_in_database(
     assert issue.deleted_at is None
 
 
-def test_create_issue_ignores_owner_and_status_from_body(
+def test_create_issue_rejects_owner_and_status_in_body(
     client: TestClient, payload: dict
 ) -> None:
     body = {**payload, "owner_id": 999, "status": "closed"}
 
     response = client.post("/issues", json=body, headers=auth_headers(client))
 
-    assert response.status_code == 201
-    assert response.json()["owner_id"] != 999
-    assert response.json()["status"] == "open"
+    assert response.status_code == 422
+    fields = [detail["field"] for detail in response.json()["details"]]
+    assert "body.owner_id" in fields
+    assert "body.status" in fields
 
 
 def test_create_issue_address_is_optional(client: TestClient, payload: dict) -> None:
@@ -158,7 +159,7 @@ def test_create_issue_with_unknown_category_is_rejected(
     response = client.post("/issues", json=body, headers=auth_headers(client))
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "Category not found"
+    assert response.json()["message"] == "Category not found"
 
 
 def test_create_issue_without_category_id_is_rejected(client: TestClient, payload: dict) -> None:

@@ -1,9 +1,10 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import EmailStr, Field
 
 from app.models.user import UserRole
+from app.schemas.base import BaseSchema, RequestSchema
 
 
-class RegisterRequest(BaseModel):
+class RegisterRequest(RequestSchema):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     first_name: str = Field(min_length=1, max_length=100)
@@ -11,21 +12,22 @@ class RegisterRequest(BaseModel):
     role: UserRole = UserRole.CLIENT
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(RequestSchema):
     email: EmailStr
     password: str
 
 
-class RefreshRequest(BaseModel):
+class RefreshRequest(RequestSchema):
     refresh_token: str
 
 
-class TokenResponse(BaseModel):
+class TokenResponse(BaseSchema):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
 
-class UserResponse(BaseModel):
+
+class UserResponse(BaseSchema):
     id: int
     email: EmailStr
     first_name: str
@@ -33,7 +35,6 @@ class UserResponse(BaseModel):
     role: UserRole
     is_active: bool
 
-    model_config = {"from_attributes": True}
 
-class MessageResponse(BaseModel):
+class MessageResponse(BaseSchema):
     message: str

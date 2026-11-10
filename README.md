@@ -143,3 +143,31 @@ Set these under Settings → Secrets and variables → Actions. Until real value
 The backend deploy target is not decided yet.
 A placeholder workflow lives in `.github/workflows/deploy.yml` and runs manually only.
 The Docker image is built and pushed to GHCR by `.github/workflows/docker.yml` on merge to `main`.
+
+
+## Adding DTOs for a new endpoint
+
+All request and response schemas live in `app/schemas/`, one module per domain (`issue.py`, `auth.py`, ...).
+
+**Naming:** `XCreate` for POST bodies, `XUpdate` for PATCH bodies, `XRead` for responses.
+
+**Base classes** (`app/schemas/base.py`):
+
+- Request DTOs inherit `RequestSchema`: unknown fields are rejected with 422, strings are stripped.
+- Response DTOs inherit `BaseSchema`: `from_attributes=True`, so routes can return ORM objects.
+
+**Constraints:** use `Field(...)` for lengths and ranges, enums for fixed values, `EmailStr` for emails. In `XUpdate` make every field optional (`= None`) for partial updates.
+
+**Every route declares `response_model`**, so only DTO fields are returned and documented.
+
+**Lists use shared pagination:**
+
+```python
+@router.get("", response_model=Page[XRead])
+def list_x(params: Annotated[PageParams, Depends()], ...):
+    ...
+```
+
+Use `Depends()`, not `Query()`, for `PageParams`: with `Query()` the params break as soon as the route has other query parameters.
+
+**Errors:** raise `HTTPException(status_code, "message")`. All errors are returned as `{"code", "message", "details"}`; validation errors list field paths in `details` (e.g. `body.email`, `query.limit`).zeZz

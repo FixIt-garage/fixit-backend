@@ -1,9 +1,7 @@
-from pydantic import BaseModel, ConfigDict
+from app.schemas.base import BaseSchema
 
 
-class CategoryRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class CategoryRead(BaseSchema):
     id: int
     name: str
     slug: str | None

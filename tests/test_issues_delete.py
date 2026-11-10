@@ -77,7 +77,7 @@ def test_deleted_issue_disappears_from_get_and_list(
     client.delete(f"/issues/{created['id']}", headers=headers)
 
     assert client.get(f"/issues/{created['id']}", headers=headers).status_code == 404
-    assert client.get("/issues", headers=headers).json() == []
+    assert client.get("/issues", headers=headers).json()["items"] == []
 
 
 def test_delete_twice_returns_404(client: TestClient, category_id: int) -> None:
