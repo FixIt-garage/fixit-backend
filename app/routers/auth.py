@@ -77,11 +77,19 @@ def register(
             detail="A user with this email already exists",
         )
 
+    if request.phone is not None and db.scalar(select(User.id).where(User.phone == request.phone)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this phone already exists",
+        )
+
     user = User(
         email=str(request.email),
         password_hash=hash_password(request.password),
         first_name=request.first_name,
         last_name=request.last_name,
+        phone=request.phone,
+        address=request.address,
         role=request.role,
     )
 
@@ -106,6 +114,15 @@ def register(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="A user with this email already exists",
+            ) from exc
+
+        if (
+            getattr(original_error, "sqlstate", None) == "23505"
+            and constraint_name == "uq_users_phone"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A user with this phone already exists",
             ) from exc
 
         raise
