@@ -156,7 +156,7 @@ def test_patch_with_unknown_category_is_rejected(
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "Category not found"
+    assert response.json()["message"] == "Category not found"
 
 
 @pytest.mark.parametrize(

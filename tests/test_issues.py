@@ -158,7 +158,7 @@ def test_create_issue_with_unknown_category_is_rejected(
     response = client.post("/issues", json=body, headers=auth_headers(client))
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "Category not found"
+    assert response.json()["message"] == "Category not found"
 
 
 def test_create_issue_without_category_id_is_rejected(client: TestClient, payload: dict) -> None:

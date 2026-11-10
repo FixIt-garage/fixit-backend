@@ -61,7 +61,7 @@ def test_get_issue_unknown_id_returns_404(client: TestClient) -> None:
     response = client.get("/issues/999999", headers=auth_headers(client))
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "Issue not found"
+    assert response.json()["message"] == "Issue not found"
 
 
 def test_get_issue_of_another_user_returns_404(client: TestClient, category_id: int) -> None:

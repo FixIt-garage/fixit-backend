@@ -16,6 +16,7 @@ HTTP_ERROR_CODES = {
     404: "not_found",
     405: "method_not_allowed",
     409: "conflict",
+    422: "unprocessable_entity",
 }
 
 
