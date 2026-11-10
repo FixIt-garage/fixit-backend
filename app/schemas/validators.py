@@ -3,7 +3,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, StringConstraints
 
-PHONE_RE = re.compile(r"^\+380\d{9}$")
+PHONE_RE = re.compile(r"^\+380[0-9]{9}$")
 
 
 def normalize_phone(value: str) -> str:

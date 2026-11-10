@@ -77,3 +77,31 @@ def test_blank_address_is_rejected(client: TestClient) -> None:
 
 def test_unknown_role_is_rejected(client: TestClient) -> None:
     assert register(client, role="superuser").status_code == 422
+
+
+@pytest.mark.parametrize(
+    "digits",
+    [
+        "\uff15\uff10\uff11\uff12\uff13\uff14\uff15\uff16\uff17",  # fullwidth
+        "\u0665\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667",  # Arabic-Indic
+    ],
+)
+def test_non_ascii_digits_in_phone_are_rejected(client: TestClient, digits: str) -> None:
+
+    assert register(client, phone="+380" + digits).status_code == 422
+
+
+def test_non_ascii_digits_cannot_duplicate_an_existing_phone(
+    client: TestClient, test_session_factory
+) -> None:
+
+    assert register(client, email="a@example.com", phone="+380501234567").status_code == 201
+
+    lookalike = "+380" + "\uff15\uff10\uff11\uff12\uff13\uff14\uff15\uff16\uff17"
+
+    assert register(client, email="b@example.com", phone=lookalike).status_code == 422
+
+    with test_session_factory() as db:
+        phones = db.scalars(select(User.phone).where(User.phone.is_not(None))).all()
+
+    assert phones == ["+380501234567"]
