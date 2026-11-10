@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 
 from app.models.user import UserRole
+from app.schemas.validators import Address, Phone
 
 
 class RegisterRequest(BaseModel):
@@ -8,6 +9,8 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     first_name: str = Field(min_length=1, max_length=100)
     last_name: str = Field(min_length=1, max_length=100)
+    phone: Phone | None = None
+    address: Address | None = None
     role: UserRole = UserRole.CLIENT
 
 
@@ -30,6 +33,8 @@ class UserResponse(BaseModel):
     email: EmailStr
     first_name: str
     last_name: str
+    phone: str | None = None
+    address: str | None = None
     role: UserRole
     is_active: bool
 
