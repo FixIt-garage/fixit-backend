@@ -1,6 +1,10 @@
-from pydantic import BaseModel
+from app.schemas.base import BaseSchema
 
 
-class HealthResponse(BaseModel):
+class RootResponse(BaseSchema):
+    name: str
+
+
+class HealthResponse(BaseSchema):
     status: str
     database: str

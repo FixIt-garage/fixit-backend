@@ -85,3 +85,11 @@ def test_pagination_limit_is_capped() -> None:
 
     assert response.status_code == 422
     assert response.json()["details"][0]["field"] == "query.limit"
+
+def test_openapi_documents_error_schema() -> None:
+    from app.main import app as main_app
+
+    schema = TestClient(main_app).get("/openapi.json").json()
+
+    assert "ErrorResponse" in schema["components"]["schemas"]
+    assert "422" in schema["paths"]["/issues"]["get"]["responses"]
