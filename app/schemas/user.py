@@ -1,9 +1,9 @@
-from typing import Annotated, Self
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 from app.models.user import UserRole
-from app.schemas.validators import Address, Phone
+from app.schemas.validators import Address, AvatarUrl, Phone
 
 
 class UserStats(BaseModel):
@@ -24,11 +24,6 @@ class UserProfileResponse(BaseModel):
     avatar_url: str | None
     role: UserRole
     stats: UserStats
-
-
-AvatarUrl = Annotated[
-    str, StringConstraints(strip_whitespace=True, max_length=500, pattern=r"^https?://\S+$")
-]
 
 
 class UserUpdate(BaseModel):
