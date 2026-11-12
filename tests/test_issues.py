@@ -51,7 +51,7 @@ def test_create_issue_returns_201_with_defaults(client: TestClient, payload: dic
     assert body["description"] == payload["description"]
     assert body["category_id"] == payload["category_id"]
     assert body["address"] == payload["address"]
-    assert body["status"] == "open"
+    assert body["status"] == "sent"
     assert body["created_at"]
     assert body["updated_at"]
 
@@ -87,13 +87,13 @@ def test_create_issue_is_saved_in_database(
 def test_create_issue_ignores_owner_and_status_from_body(
     client: TestClient, payload: dict
 ) -> None:
-    body = {**payload, "owner_id": 999, "status": "closed"}
+    body = {**payload, "owner_id": 999, "status": "done"}
 
     response = client.post("/issues", json=body, headers=auth_headers(client))
 
     assert response.status_code == 201
     assert response.json()["owner_id"] != 999
-    assert response.json()["status"] == "open"
+    assert response.json()["status"] == "sent"
 
 
 def test_create_issue_address_is_optional(client: TestClient, payload: dict) -> None:
