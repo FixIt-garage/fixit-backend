@@ -9,10 +9,14 @@ from app.models.base import Base
 
 
 class IssueStatus(enum.StrEnum):
-    OPEN = "open"
+    """Request flow: sent -> accepted -> in_progress -> done (or declined / cancelled)."""
+
+    SENT = "sent"
+    ACCEPTED = "accepted"
     IN_PROGRESS = "in_progress"
-    RESOLVED = "resolved"
-    CLOSED = "closed"
+    DONE = "done"
+    DECLINED = "declined"
+    CANCELLED = "cancelled"
 
 
 class Issue(Base):
@@ -28,8 +32,12 @@ class Issue(Base):
     )
 
     status: Mapped[IssueStatus] = mapped_column(
-        SQLEnum(IssueStatus),
-        default=IssueStatus.OPEN,
+        SQLEnum(
+            IssueStatus,
+            name="issuestatus",
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        default=IssueStatus.SENT,
         nullable=False,
     )
 

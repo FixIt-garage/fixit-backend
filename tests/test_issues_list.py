@@ -96,13 +96,13 @@ def test_list_filter_by_status(
     second = create_issue(client, headers, category_ids[0], "will-be-in-progress")
     create_issue(client, headers, category_ids[0], "stays-open")
     with test_session_factory() as db:
-        db.get(Issue, first["id"]).status = IssueStatus.RESOLVED
+        db.get(Issue, first["id"]).status = IssueStatus.DONE
         db.get(Issue, second["id"]).status = IssueStatus.IN_PROGRESS
         db.commit()
 
-    resolved = client.get("/issues?status=resolved", headers=headers)
+    resolved = client.get("/issues?status=done", headers=headers)
     in_progress = client.get("/issues?status=in_progress", headers=headers)
-    still_open = client.get("/issues?status=open", headers=headers)
+    still_open = client.get("/issues?status=sent", headers=headers)
 
     assert titles(resolved) == ["will-be-resolved"]
     assert titles(in_progress) == ["will-be-in-progress"]

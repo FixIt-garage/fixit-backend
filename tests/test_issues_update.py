@@ -59,7 +59,7 @@ def test_patch_updates_only_sent_fields(client: TestClient, category_ids: list[i
     assert body["description"] == created["description"]
     assert body["category_id"] == created["category_id"]
     assert body["address"] == created["address"]
-    assert body["status"] == "open"
+    assert body["status"] == "sent"
 
 
 def test_patch_can_change_status_category_and_address(
