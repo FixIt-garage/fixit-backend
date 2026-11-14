@@ -243,7 +243,14 @@ def transition_issue(
     target_status: IssueStatus,
 ) -> Issue:
     """Change issue status after checking permissions and record the event."""
-    issue = find_issue(db, issue_id)
+    issue = db.scalar(
+        select(Issue)
+        .where(
+            Issue.id == issue_id,
+            Issue.deleted_at.is_(None),
+        )
+        .with_for_update()
+    )
 
     if issue is None:
         raise IssueNotFoundError(issue_id)
