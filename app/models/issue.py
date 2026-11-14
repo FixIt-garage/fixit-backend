@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,12 +19,26 @@ class IssueStatus(enum.StrEnum):
     CANCELLED = "cancelled"
 
 
+ISSUE_STATUS_TYPE = SQLEnum(
+    IssueStatus,
+    name="issuestatus",
+    values_callable=lambda enum_cls: [member.value for member in enum_cls],
+)
+
+
 class Issue(Base):
     __tablename__ = "issues"
+    __table_args__ = (
+        CheckConstraint(
+            "assignee_master_id IS NULL OR assignee_company_id IS NULL",
+            name="ck_issues_single_assignee",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+
     category_id: Mapped[int] = mapped_column(
         ForeignKey("categories.id", ondelete="RESTRICT"),
         index=True,
@@ -32,26 +46,39 @@ class Issue(Base):
     )
 
     status: Mapped[IssueStatus] = mapped_column(
-        SQLEnum(
-            IssueStatus,
-            name="issuestatus",
-            values_callable=lambda enum_cls: [member.value for member in enum_cls],
-        ),
+        ISSUE_STATUS_TYPE,
         default=IssueStatus.SENT,
         nullable=False,
     )
 
     address: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    district: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
 
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    assignee_master_id: Mapped[int | None] = mapped_column(
+        ForeignKey("masters.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+
+    assignee_company_id: Mapped[int | None] = mapped_column(
+        ForeignKey("companies.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
+
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.utcnow,
         nullable=False,
     )
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=datetime.utcnow,

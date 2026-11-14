@@ -1,11 +1,15 @@
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.core.security import create_access_token
 from app.models.catalog import Category
 from app.models.issue import Issue
+from app.models.master import Master
+from app.models.user import User, UserRole
 
 
 @pytest.fixture
@@ -54,7 +58,66 @@ def test_get_issue_returns_own_issue(client: TestClient, category_id: int) -> No
     response = client.get(f"/issues/{created['id']}", headers=headers)
 
     assert response.status_code == 200
-    assert response.json() == created
+    body = response.json()
+
+    for key, value in created.items():
+        assert body[key] == value
+
+    assert len(body["timeline"]) == 1
+    assert body["timeline"][0]["status"] == "sent"
+    assert body["timeline"][0]["actor_id"] == body["owner_id"]
+    assert body["assigned_master"] is None
+
+
+def test_get_issue_returns_assigned_master(
+    client: TestClient,
+    category_id: int,
+    test_session_factory,
+) -> None:
+    owner_headers = auth_headers(client, "owner@example.com")
+    auth_headers(client, "master@example.com")
+
+    with test_session_factory() as db:
+        master_user = db.scalar(select(User).where(User.email == "master@example.com"))
+        assert master_user is not None
+
+        master = Master(
+            user_id=master_user.id,
+            rating=Decimal("4.80"),
+        )
+        db.add(master)
+        db.commit()
+        db.refresh(master)
+        master_id = master.id
+
+    response = client.post(
+        "/issues",
+        json={
+            "title": "Leaking tap",
+            "description": "The kitchen tap has been leaking",
+            "category_id": category_id,
+            "assignee_master_id": master_id,
+        },
+        headers=owner_headers,
+    )
+    assert response.status_code == 201
+
+    issue_id = response.json()["id"]
+
+    detail_response = client.get(
+        f"/issues/{issue_id}",
+        headers=owner_headers,
+    )
+
+    assert detail_response.status_code == 200
+
+    body = detail_response.json()
+    assert body["assigned_master"] == {
+        "name": "Test User",
+        "rating": "4.80",
+    }
+    assert body["timeline"][0]["status"] == "sent"
+    assert body["timeline"][0]["actor_id"] == body["owner_id"]
 
 
 def test_get_issue_unknown_id_returns_404(client: TestClient) -> None:
@@ -98,3 +161,82 @@ def test_get_issue_with_non_numeric_id_is_rejected(client: TestClient) -> None:
     response = client.get("/issues/abc", headers=auth_headers(client))
 
     assert response.status_code == 422
+
+
+def test_assigned_master_can_view_issue_timeline(
+    client: TestClient,
+    category_id: int,
+    test_session_factory,
+) -> None:
+    owner_headers = auth_headers(client, "timeline-owner@example.com")
+
+    with test_session_factory() as db:
+        master_user = User(
+            email="timeline-master@example.com",
+            password_hash="not-used-in-tests",
+            first_name="Assigned",
+            last_name="Master",
+            role=UserRole.MASTER,
+        )
+        db.add(master_user)
+        db.flush()
+
+        master = Master(user_id=master_user.id)
+        db.add(master)
+        db.commit()
+
+        master_id = master.id
+        master_token = create_access_token(str(master_user.id))
+
+    created = client.post(
+        "/issues",
+        json={
+            "title": "Leaking tap",
+            "description": "The kitchen tap has been leaking",
+            "category_id": category_id,
+            "assignee_master_id": master_id,
+        },
+        headers=owner_headers,
+    )
+    assert created.status_code == 201
+
+    response = client.get(
+        f"/issues/{created.json()['id']}",
+        headers={"Authorization": f"Bearer {master_token}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["title"] == "Leaking tap"
+    assert len(body["timeline"]) == 1
+    assert body["timeline"][0]["status"] == "sent"
+    assert body["timeline"][0]["actor_id"] == body["owner_id"]
+
+
+def test_unassigned_master_cannot_view_issue(
+    client: TestClient,
+    category_id: int,
+    test_session_factory,
+) -> None:
+    owner_headers = auth_headers(client, "private-owner@example.com")
+
+    with test_session_factory() as db:
+        master_user = User(
+            email="unassigned-master@example.com",
+            password_hash="not-used-in-tests",
+            first_name="Other",
+            last_name="Master",
+            role=UserRole.MASTER,
+        )
+        db.add(master_user)
+        db.commit()
+        master_token = create_access_token(str(master_user.id))
+
+    created = create_issue(client, owner_headers, category_id)
+
+    response = client.get(
+        f"/issues/{created['id']}",
+        headers={"Authorization": f"Bearer {master_token}"},
+    )
+
+    assert response.status_code == 404

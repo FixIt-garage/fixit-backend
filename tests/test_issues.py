@@ -3,8 +3,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.models.catalog import Category
-from app.models.issue import Issue
-from app.models.user import User
+from app.models.company import Company
+from app.models.issue import Issue, IssueStatus
+from app.models.issue_status_event import IssueStatusEvent
+from app.models.master import Master
+from app.models.user import User, UserRole
 
 
 @pytest.fixture
@@ -84,9 +87,7 @@ def test_create_issue_is_saved_in_database(
     assert issue.deleted_at is None
 
 
-def test_create_issue_ignores_owner_and_status_from_body(
-    client: TestClient, payload: dict
-) -> None:
+def test_create_issue_ignores_owner_and_status_from_body(client: TestClient, payload: dict) -> None:
     body = {**payload, "owner_id": 999, "status": "done"}
 
     response = client.post("/issues", json=body, headers=auth_headers(client))
@@ -105,6 +106,15 @@ def test_create_issue_address_is_optional(client: TestClient, payload: dict) -> 
     assert response.json()["address"] is None
 
 
+def test_create_issue_saves_district(client: TestClient, payload: dict) -> None:
+    body = {**payload, "district": "Галицький"}
+
+    response = client.post("/issues", json=body, headers=auth_headers(client))
+
+    assert response.status_code == 201
+    assert response.json()["district"] == "Галицький"
+
+
 def test_create_issue_without_token_is_rejected(client: TestClient, payload: dict) -> None:
     response = client.post("/issues", json=payload)
 
@@ -119,9 +129,7 @@ def test_create_issue_with_empty_title_is_rejected(client: TestClient, payload: 
     assert response.status_code == 422
 
 
-def test_create_issue_without_description_is_rejected(
-    client: TestClient, payload: dict
-) -> None:
+def test_create_issue_without_description_is_rejected(client: TestClient, payload: dict) -> None:
     body = {key: value for key, value in payload.items() if key != "description"}
 
     response = client.post("/issues", json=body, headers=auth_headers(client))
@@ -150,9 +158,7 @@ def test_create_issue_strips_surrounding_whitespace(client: TestClient, payload:
     assert response.json()["description"] == "No water"
 
 
-def test_create_issue_with_unknown_category_is_rejected(
-    client: TestClient, payload: dict
-) -> None:
+def test_create_issue_with_unknown_category_is_rejected(client: TestClient, payload: dict) -> None:
     body = {**payload, "category_id": 999999}
 
     response = client.post("/issues", json=body, headers=auth_headers(client))
@@ -167,6 +173,7 @@ def test_create_issue_without_category_id_is_rejected(client: TestClient, payloa
     response = client.post("/issues", json=body, headers=auth_headers(client))
 
     assert response.status_code == 422
+
 
 def test_create_issue_description_at_max_length_is_accepted(
     client: TestClient, payload: dict
@@ -186,3 +193,113 @@ def test_create_issue_description_over_max_length_is_rejected(
     response = client.post("/issues", json=body, headers=auth_headers(client))
 
     assert response.status_code == 422
+
+
+def test_create_issue_with_master_assignee(
+    client: TestClient, test_session_factory, payload: dict
+) -> None:
+    headers = auth_headers(client)
+
+    with test_session_factory() as db:
+        master_user = User(
+            email="assigned-master@example.com",
+            password_hash="hashed-password",
+            first_name="Assigned",
+            last_name="Master",
+            role=UserRole.MASTER,
+        )
+        db.add(master_user)
+        db.flush()
+
+        master = Master(user_id=master_user.id)
+        db.add(master)
+        db.commit()
+        master_id = master.id
+
+    response = client.post(
+        "/issues",
+        json={**payload, "assignee_master_id": master_id},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["assignee_master_id"] == master_id
+    assert response.json()["assignee_company_id"] is None
+
+
+def test_create_issue_with_company_assignee(
+    client: TestClient, test_session_factory, payload: dict
+) -> None:
+    headers = auth_headers(client)
+
+    with test_session_factory() as db:
+        company = Company(name="Test Service Center")
+        db.add(company)
+        db.commit()
+        company_id = company.id
+
+    response = client.post(
+        "/issues",
+        json={**payload, "assignee_company_id": company_id},
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["assignee_company_id"] == company_id
+    assert response.json()["assignee_master_id"] is None
+
+
+def test_create_issue_with_unknown_master_is_rejected(client: TestClient, payload: dict) -> None:
+    response = client.post(
+        "/issues",
+        json={**payload, "assignee_master_id": 999999},
+        headers=auth_headers(client),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Master not found"
+
+
+def test_create_issue_with_unknown_company_is_rejected(client: TestClient, payload: dict) -> None:
+    response = client.post(
+        "/issues",
+        json={**payload, "assignee_company_id": 999999},
+        headers=auth_headers(client),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Service center not found"
+
+
+def test_create_issue_with_both_assignees_is_rejected(client: TestClient, payload: dict) -> None:
+    response = client.post(
+        "/issues",
+        json={
+            **payload,
+            "assignee_master_id": 1,
+            "assignee_company_id": 1,
+        },
+        headers=auth_headers(client),
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_issue_records_initial_status_event(
+    client: TestClient, test_session_factory, payload: dict
+) -> None:
+    headers = auth_headers(client, "timeline-owner@example.com")
+
+    response = client.post("/issues", json=payload, headers=headers)
+
+    assert response.status_code == 201
+    issue_id = response.json()["id"]
+
+    with test_session_factory() as db:
+        event = db.query(IssueStatusEvent).filter_by(issue_id=issue_id).one()
+        owner = db.scalar(select(User).where(User.email == "timeline-owner@example.com"))
+
+        assert owner is not None
+        assert event.status == IssueStatus.SENT
+        assert event.actor_id == owner.id
+        assert event.created_at is not None
