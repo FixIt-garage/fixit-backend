@@ -7,8 +7,6 @@ from app.core.dependencies import get_current_user
 from app.db import get_db
 from app.models.issue import Issue, IssueStatus
 from app.models.user import User
-from app.schemas.review import ReviewCreate, ReviewRead
-from app.services import review as review_service
 from app.schemas.issue import (
     IssueCreate,
     IssueDetailRead,
@@ -16,7 +14,9 @@ from app.schemas.issue import (
     IssueRead,
     IssueUpdate,
 )
+from app.schemas.review import ReviewCreate, ReviewRead
 from app.services import issue as issue_service
+from app.services import review as review_service
 
 router = APIRouter(prefix="/issues", tags=["Issues"])
 

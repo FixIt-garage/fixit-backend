@@ -5,9 +5,9 @@ from sqlalchemy import select
 
 from app.core.security import create_access_token
 from app.models.catalog import Category
+from app.models.company import Company
 from app.models.issue import Issue, IssueStatus
 from app.models.master import Master
-from app.models.company import Company
 from app.models.review import Review
 from app.models.user import User, UserRole
 
@@ -168,6 +168,37 @@ def test_review_for_non_completed_issue_returns_409(
 
     with test_session_factory() as db:
         assert db.scalar(select(Review.id)) is None
+
+
+def test_review_with_unknown_target_returns_409(
+    client: TestClient,
+    test_session_factory,
+) -> None:
+    data = setup_review_data(test_session_factory, "unknown-target")
+
+    with test_session_factory() as db:
+        issue = db.get(Issue, data["issue_id"])
+        assert issue is not None
+        issue.review_target_unknown = True
+        db.commit()
+
+    response = client.post(
+        f"/issues/{data['issue_id']}/review",
+        headers={"Authorization": f"Bearer {data['owner_token']}"},
+        json=review_payload(),
+    )
+
+    assert response.status_code == 409
+
+    with test_session_factory() as db:
+        assert db.scalar(
+            select(Review.id).where(Review.issue_id == data["issue_id"])
+        ) is None
+
+        master = db.get(Master, data["master_id"])
+        assert master is not None
+        assert master.rating is None
+        assert master.reviews_count == 0
 
 
 def test_non_owner_cannot_review_issue(

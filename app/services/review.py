@@ -61,6 +61,11 @@ def create_review(
     if existing_review is not None:
         raise ReviewAlreadyExistsError(issue.id)
 
+    if issue.review_target_unknown:
+        raise ReviewTargetNotFoundError(
+            "The original review target is unknown"
+        )
+
     master = None
     company = None
 

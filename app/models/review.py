@@ -2,11 +2,11 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
-    JSON,
     Text,
     UniqueConstraint,
     func,

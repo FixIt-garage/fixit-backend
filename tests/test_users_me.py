@@ -4,7 +4,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.models import Category, Issue, IssueStatus, Master, MasterService, Review, Service, User
+from app.models import Category, Issue, IssueStatus, Master, Review, User
+
 
 def register(client: TestClient, email: str, role: str = "client", **extra) -> dict[str, str]:
     payload = {

@@ -1,7 +1,15 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    false,
+)
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -71,6 +79,13 @@ class Issue(Base):
     review_company_id: Mapped[int | None] = mapped_column(
         ForeignKey("companies.id", ondelete="SET NULL"),
         nullable=True,
+    )
+
+    review_target_unknown: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default=false(),
+        nullable=False,
     )
 
     deleted_at: Mapped[datetime | None] = mapped_column(
