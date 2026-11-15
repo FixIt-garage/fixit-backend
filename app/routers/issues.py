@@ -14,7 +14,9 @@ from app.schemas.issue import (
     IssueRead,
     IssueUpdate,
 )
+from app.schemas.review import ReviewCreate, ReviewRead
 from app.services import issue as issue_service
+from app.services import review as review_service
 
 router = APIRouter(prefix="/issues", tags=["Issues"])
 
@@ -227,3 +229,49 @@ def delete_issue(
     """Soft delete an issue. Only its owner can do this."""
     issue = get_owned_issue(db, issue_id, current_user)
     issue_service.delete_issue(db, issue)
+
+
+
+@router.post(
+    "/{issue_id}/review",
+    response_model=ReviewRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_issue_review(
+    issue_id: int,
+    data: ReviewCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Leave a review for a completed issue owned by the current user."""
+    try:
+        review = review_service.create_review(
+            db,
+            issue_id,
+            current_user,
+            data,
+        )
+    except review_service.IssueNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Issue not found") from exc
+    except review_service.ReviewPermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except (
+        review_service.IssueNotCompletedError,
+        review_service.ReviewAlreadyExistsError,
+        review_service.ReviewTargetNotFoundError,
+    ) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return {
+        "id": review.id,
+        "issue_id": review.issue_id,
+        "master_id": review.master_id,
+        "company_id": review.company_id,
+        "rating": review.rating,
+        "tags": review.tags,
+        "comment": review.comment,
+        "created_at": review.created_at,
+        "author_first_name": current_user.first_name,
+        "author_last_name": current_user.last_name,
+        "author_avatar_url": current_user.avatar_url,
+    }

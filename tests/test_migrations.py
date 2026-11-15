@@ -343,3 +343,192 @@ def test_user_profile_migration_fills_public_id_for_existing_users() -> None:
             assert last > max(ids)
         finally:
             engine.dispose()
+
+
+@requires_db
+def test_review_migration_marks_accepted_company_issues_as_unknown() -> None:
+    with disposable_database() as url:
+        _assert_connected_to(url)
+        config = _alembic_config(url)
+
+        # Build the database before the review migrations.
+        command.upgrade(config, "00a7f28f1dbe")
+
+        engine = create_engine(url)
+        try:
+            with engine.begin() as conn:
+                category_id = conn.execute(
+                    text("SELECT id FROM categories ORDER BY id LIMIT 1")
+                ).scalar_one()
+
+                owner_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO users (
+                            email, password_hash, first_name, last_name
+                        )
+                        VALUES (
+                            'review-owner@example.com', 'hash', 'Review', 'Owner'
+                        )
+                        RETURNING id
+                        """
+                    )
+                ).scalar_one()
+
+                master_user_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO users (
+                            email, password_hash, first_name, last_name
+                        )
+                        VALUES (
+                            'review-master@example.com', 'hash', 'Review', 'Master'
+                        )
+                        RETURNING id
+                        """
+                    )
+                ).scalar_one()
+
+                company_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO companies (name)
+                        VALUES ('Review Test Service Center')
+                        RETURNING id
+                        """
+                    )
+                ).scalar_one()
+
+                master_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO masters (user_id, company_id)
+                        VALUES (:user_id, :company_id)
+                        RETURNING id
+                        """
+                    ),
+                    {
+                        "user_id": master_user_id,
+                        "company_id": company_id,
+                    },
+                ).scalar_one()
+
+                # A company-origin issue was accepted by a master.
+                company_issue_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO issues (
+                            title,
+                            description,
+                            category_id,
+                            status,
+                            owner_id,
+                            assignee_company_id,
+                            created_at,
+                            updated_at
+                        )
+                        VALUES (
+                            'Historical company issue',
+                            'Originally assigned to a service center',
+                            :category_id,
+                            'accepted',
+                            :owner_id,
+                            :company_id,
+                            now(),
+                            now()
+                        )
+                        RETURNING id
+                        """
+                    ),
+                    {
+                        "category_id": category_id,
+                        "owner_id": owner_id,
+                        "company_id": company_id,
+                    },
+                ).scalar_one()
+
+                # Accepting the issue as a master clears the company assignment.
+                conn.execute(
+                    text(
+                        """
+                        UPDATE issues
+                        SET assignee_master_id = :master_id,
+                            assignee_company_id = NULL,
+                            status = 'done'
+                        WHERE id = :issue_id
+                        """
+                    ),
+                    {
+                        "master_id": master_id,
+                        "issue_id": company_issue_id,
+                    },
+                )
+
+                # A direct-to-master issue is still waiting for acceptance.
+                direct_issue_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO issues (
+                            title,
+                            description,
+                            category_id,
+                            status,
+                            owner_id,
+                            assignee_master_id,
+                            created_at,
+                            updated_at
+                        )
+                        VALUES (
+                            'Direct master issue',
+                            'Still waiting for acceptance',
+                            :category_id,
+                            'sent',
+                            :owner_id,
+                            :master_id,
+                            now(),
+                            now()
+                        )
+                        RETURNING id
+                        """
+                    ),
+                    {
+                        "category_id": category_id,
+                        "owner_id": owner_id,
+                        "master_id": master_id,
+                    },
+                ).scalar_one()
+
+            # Apply the review migrations to this historical state.
+            command.upgrade(config, "head")
+
+            with engine.connect() as conn:
+                company_issue = conn.execute(
+                    text(
+                        """
+                        SELECT review_company_id, review_target_unknown
+                        FROM issues
+                        WHERE id = :issue_id
+                        """
+                    ),
+                    {"issue_id": company_issue_id},
+                ).one()
+
+                direct_issue = conn.execute(
+                    text(
+                        """
+                        SELECT review_target_unknown
+                        FROM issues
+                        WHERE id = :issue_id
+                        """
+                    ),
+                    {"issue_id": direct_issue_id},
+                ).one()
+
+            # The original company target cannot be recovered.
+            assert company_issue.review_company_id is None
+            assert company_issue.review_target_unknown is True
+
+            # A direct-to-master SENT issue has a known review target.
+            assert direct_issue.review_target_unknown is False
+        finally:
+            engine.dispose()

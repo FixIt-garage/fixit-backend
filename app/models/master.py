@@ -1,7 +1,16 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -16,7 +25,15 @@ class Master(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
     skills_description: Mapped[str | None] = mapped_column(Text)
     # Cached average of the master's reviews; recalculate on every new review.
+
     rating: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+    reviews_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+
     company_id: Mapped[int | None] = mapped_column(ForeignKey("companies.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -34,27 +51,39 @@ class Master(Base):
 
     user = relationship("User", back_populates="master_profile")
     company = relationship("Company")
-    services = relationship("Service", secondary="master_services", back_populates="masters")
-    categories = relationship("Category", secondary="master_categories")
-
+    services = relationship(
+        "Service",
+        secondary="master_services",
+        back_populates="masters",
+    )
+    categories = relationship("Category",
+                              secondary="master_categories")
 
 class MasterService(Base):
     """Many-to-many: which services a master provides."""
 
     __tablename__ = "master_services"
 
-    master_id: Mapped[int] = mapped_column(ForeignKey("masters.id"), primary_key=True)
-    service_id: Mapped[int] = mapped_column(ForeignKey("services.id"), primary_key=True)
-
+    master_id: Mapped[int] = mapped_column(
+        ForeignKey("masters.id"),
+        primary_key=True,
+    )
+    service_id: Mapped[int] = mapped_column(
+        ForeignKey("services.id"),
+        primary_key=True,
+    )
 
 class MasterCategory(Base):
-    """Many-to-many: which repair categories a master works in."""
+    """Many-to-many: which categories a master works in."""
 
     __tablename__ = "master_categories"
 
     master_id: Mapped[int] = mapped_column(
-        ForeignKey("masters.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("masters.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     category_id: Mapped[int] = mapped_column(
-        ForeignKey("categories.id", ondelete="RESTRICT"), primary_key=True, index=True
+        ForeignKey("categories.id", ondelete="RESTRICT"),
+        primary_key=True,
+        index=True,
     )

@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.models import Category, Master, MasterService, Order, OrderStatus, Review, Service, User
+from app.models import Category, Issue, IssueStatus, Master, Review, User
 
 
 def register(client: TestClient, email: str, role: str = "client", **extra) -> dict[str, str]:
@@ -46,27 +46,35 @@ def category_id(test_session_factory) -> int:
 def add_review(
     test_session_factory, client_email: str, master_email: str, category_id: int
 ) -> None:
-    """Create a completed order of the client with the master and a review of it."""
+    """Create a completed issue of the client with a master and review it."""
     with test_session_factory() as db:
         client_user = db.scalar(select(User).where(User.email == client_email))
         master_user = db.scalar(select(User).where(User.email == master_email))
+
         master = Master(user_id=master_user.id)
-        service = Service(category_id=category_id, name="Fix a tap")
-        db.add_all([master, service])
+        db.add(master)
         db.flush()
-        db.add(MasterService(master_id=master.id, service_id=service.id))
-        db.flush()
-        order = Order(
-            client_id=client_user.id,
-            service_id=service.id,
-            master_id=master.id,
+
+        issue = Issue(
+            title="Leaking tap",
             description="Fix the tap",
-            address="Lviv",
-            status=OrderStatus.completed,
+            category_id=category_id,
+            owner_id=client_user.id,
+            assignee_master_id=master.id,
+            status=IssueStatus.DONE,
         )
-        db.add(order)
+        db.add(issue)
         db.flush()
-        db.add(Review(order_id=order.id, rating=5))
+
+        db.add(
+            Review(
+                issue_id=issue.id,
+                author_id=client_user.id,
+                master_id=master.id,
+                rating=5,
+                tags=[],
+            )
+        )
         db.commit()
 
 
