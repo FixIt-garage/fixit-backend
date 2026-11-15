@@ -40,10 +40,10 @@ EMAIL_MAX_LENGTH = 255
 _email = TypeAdapter(EmailStr)
 
 
-def normalize_email(value: str) -> str:
-    """Trim spaces, lower-case the address and check the format and the length."""
+def clean_email(value: str) -> str:
+    """Trim spaces and check the format and the length; the case is kept."""
     try:
-        email = str(_email.validate_python(value.strip())).lower()
+        email = str(_email.validate_python(value.strip()))
     except ValueError as exc:
         raise ValueError("Email must be a valid address") from exc
     if len(email) > EMAIL_MAX_LENGTH:
@@ -51,4 +51,11 @@ def normalize_email(value: str) -> str:
     return email
 
 
+def normalize_email(value: str) -> str:
+    """The clean address in lower case, used for new accounts."""
+    return clean_email(value).lower()
+
+
 Email = Annotated[str, AfterValidator(normalize_email)]
+# Login keeps the typed case: old accounts can differ only by case.
+LoginEmail = Annotated[str, AfterValidator(clean_email)]
