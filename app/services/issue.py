@@ -51,7 +51,11 @@ def create_issue(db: Session, data: IssueCreate, owner: User) -> Issue:
         if company is None:
             raise CompanyNotFoundError(data.assignee_company_id)
 
-    issue = Issue(**data.model_dump(), owner_id=owner.id)
+    issue = Issue(
+        **data.model_dump(),
+        owner_id=owner.id,
+        review_company_id=data.assignee_company_id,
+    )
     db.add(issue)
     db.flush()
 

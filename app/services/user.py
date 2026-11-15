@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 
 from app.models.issue import Issue
 from app.models.master import Master
-from app.models.order import Order
 from app.models.review import Review
 from app.models.user import User, UserRole
 from app.schemas.user import UserProfileResponse, UserStats, UserUpdate
@@ -22,13 +21,17 @@ def count_requests(db: Session, user: User) -> int:
 
 def count_reviews(db: Session, user: User) -> int:
     """Masters: reviews they received. Everyone else: reviews they wrote."""
-    query = select(func.count()).select_from(Review).join(Order, Order.id == Review.order_id)
-    if user.role == UserRole.MASTER:
-        query = query.join(Master, Master.id == Order.master_id).where(Master.user_id == user.id)
-    else:
-        query = query.where(Order.client_id == user.id)
-    return db.scalar(query) or 0
+    query = select(func.count()).select_from(Review)
 
+    if user.role == UserRole.MASTER:
+        query = query.join(
+            Master,
+            Master.id == Review.master_id,
+        ).where(Master.user_id == user.id)
+    else:
+        query = query.where(Review.author_id == user.id)
+
+    return db.scalar(query) or 0
 
 def get_profile(db: Session, user: User) -> UserProfileResponse:
     return UserProfileResponse(
