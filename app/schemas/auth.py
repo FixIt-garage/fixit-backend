@@ -1,11 +1,11 @@
 from pydantic import BaseModel, EmailStr, Field
 
 from app.models.user import UserRole
-from app.schemas.validators import Address, Phone
+from app.schemas.validators import Address, Email, Phone
 
 
 class RegisterRequest(BaseModel):
-    email: EmailStr
+    email: Email
     password: str = Field(min_length=8, max_length=128)
     first_name: str = Field(min_length=1, max_length=100)
     last_name: str = Field(min_length=1, max_length=100)
@@ -15,7 +15,7 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: Email
     password: str
 
 

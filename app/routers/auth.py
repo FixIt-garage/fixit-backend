@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -68,7 +68,7 @@ def register(
 ) -> TokenResponse:
     """Register a new user and return a token pair."""
     existing_user = db.scalar(
-        select(User).where(User.email == str(request.email))
+        select(User).where(func.lower(User.email) == request.email)
     )
 
     if existing_user:
@@ -140,7 +140,7 @@ def login(
 ) -> TokenResponse:
     """Authenticate a user and return a token pair."""
     user = db.scalar(
-        select(User).where(User.email == str(request.email))
+        select(User).where(func.lower(User.email) == request.email)
     )
 
     if (

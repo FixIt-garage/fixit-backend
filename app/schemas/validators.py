@@ -1,7 +1,7 @@
 import re
 from typing import Annotated
 
-from pydantic import AfterValidator, HttpUrl, StringConstraints, TypeAdapter
+from pydantic import AfterValidator, EmailStr, HttpUrl, StringConstraints, TypeAdapter
 
 PHONE_RE = re.compile(r"^\+380[0-9]{9}$")
 
@@ -34,3 +34,21 @@ def validate_avatar_url(value: str) -> str:
 
 
 AvatarUrl = Annotated[str, AfterValidator(validate_avatar_url)]
+
+
+EMAIL_MAX_LENGTH = 255
+_email = TypeAdapter(EmailStr)
+
+
+def normalize_email(value: str) -> str:
+    """Trim spaces, lower-case the address and check the format and the length."""
+    try:
+        email = str(_email.validate_python(value.strip())).lower()
+    except ValueError as exc:
+        raise ValueError("Email must be a valid address") from exc
+    if len(email) > EMAIL_MAX_LENGTH:
+        raise ValueError(f"Email must be at most {EMAIL_MAX_LENGTH} characters")
+    return email
+
+
+Email = Annotated[str, AfterValidator(normalize_email)]
