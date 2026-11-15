@@ -413,8 +413,8 @@ def test_review_migration_marks_accepted_company_issues_as_unknown() -> None:
                     },
                 ).scalar_one()
 
-                # The issue was originally assigned to the service center.
-                issue_id = conn.execute(
+                # A company-origin issue was accepted by a master.
+                company_issue_id = conn.execute(
                     text(
                         """
                         INSERT INTO issues (
@@ -428,8 +428,8 @@ def test_review_migration_marks_accepted_company_issues_as_unknown() -> None:
                             updated_at
                         )
                         VALUES (
-                            'Historical issue',
-                            'Migration regression test',
+                            'Historical company issue',
+                            'Originally assigned to a service center',
                             :category_id,
                             'accepted',
                             :owner_id,
@@ -460,15 +460,49 @@ def test_review_migration_marks_accepted_company_issues_as_unknown() -> None:
                     ),
                     {
                         "master_id": master_id,
-                        "issue_id": issue_id,
+                        "issue_id": company_issue_id,
                     },
                 )
+
+                # A direct-to-master issue is still waiting for acceptance.
+                direct_issue_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO issues (
+                            title,
+                            description,
+                            category_id,
+                            status,
+                            owner_id,
+                            assignee_master_id,
+                            created_at,
+                            updated_at
+                        )
+                        VALUES (
+                            'Direct master issue',
+                            'Still waiting for acceptance',
+                            :category_id,
+                            'sent',
+                            :owner_id,
+                            :master_id,
+                            now(),
+                            now()
+                        )
+                        RETURNING id
+                        """
+                    ),
+                    {
+                        "category_id": category_id,
+                        "owner_id": owner_id,
+                        "master_id": master_id,
+                    },
+                ).scalar_one()
 
             # Apply the review migrations to this historical state.
             command.upgrade(config, "head")
 
             with engine.connect() as conn:
-                result = conn.execute(
+                company_issue = conn.execute(
                     text(
                         """
                         SELECT review_company_id, review_target_unknown
@@ -476,10 +510,25 @@ def test_review_migration_marks_accepted_company_issues_as_unknown() -> None:
                         WHERE id = :issue_id
                         """
                     ),
-                    {"issue_id": issue_id},
+                    {"issue_id": company_issue_id},
                 ).one()
 
-            assert result.review_company_id is None
-            assert result.review_target_unknown is True
+                direct_issue = conn.execute(
+                    text(
+                        """
+                        SELECT review_target_unknown
+                        FROM issues
+                        WHERE id = :issue_id
+                        """
+                    ),
+                    {"issue_id": direct_issue_id},
+                ).one()
+
+            # The original company target cannot be recovered.
+            assert company_issue.review_company_id is None
+            assert company_issue.review_target_unknown is True
+
+            # A direct-to-master SENT issue has a known review target.
+            assert direct_issue.review_target_unknown is False
         finally:
             engine.dispose()

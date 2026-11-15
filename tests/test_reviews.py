@@ -411,3 +411,109 @@ def test_get_service_center_reviews_supports_pagination(
     assert body["offset"] == 1
     assert len(body["items"]) == 1
     assert body["items"][0]["rating"] == 5
+
+
+def test_direct_master_issue_can_be_reviewed_after_normal_completion_flow(
+    client: TestClient,
+    test_session_factory,
+) -> None:
+    with test_session_factory() as db:
+        category_id = db.scalar(select(Category.id).order_by(Category.id))
+        assert category_id is not None
+
+        owner = create_test_user(
+            db,
+            "direct-review-owner@example.com",
+            UserRole.CLIENT,
+        )
+        master_user = create_test_user(
+            db,
+            "direct-review-master@example.com",
+            UserRole.MASTER,
+        )
+
+        master = Master(user_id=master_user.id)
+        db.add(master)
+        db.commit()
+
+        owner_token = create_access_token(str(owner.id))
+        master_token = create_access_token(str(master_user.id))
+        master_id = master.id
+
+    owner_headers = {"Authorization": f"Bearer {owner_token}"}
+    master_headers = {"Authorization": f"Bearer {master_token}"}
+
+    # The client creates a request directly assigned to a master.
+    create_response = client.post(
+        "/issues",
+        headers=owner_headers,
+        json={
+            "title": "Broken washing machine",
+            "description": "The washing machine does not start",
+            "category_id": category_id,
+            "assignee_master_id": master_id,
+        },
+    )
+
+    assert create_response.status_code == 201, create_response.json()
+    issue_id = create_response.json()["id"]
+    assert create_response.json()["status"] == "sent"
+
+    # The master accepts the request.
+    accept_response = client.post(
+        f"/issues/{issue_id}/accept",
+        headers=master_headers,
+    )
+    assert accept_response.status_code == 200, accept_response.json()
+    assert accept_response.json()["status"] == "accepted"
+
+    # The master starts working on the request.
+    start_response = client.post(
+        f"/issues/{issue_id}/start",
+        headers=master_headers,
+    )
+    assert start_response.status_code == 200, start_response.json()
+    assert start_response.json()["status"] == "in_progress"
+
+    # The master completes the request.
+    complete_response = client.post(
+        f"/issues/{issue_id}/complete",
+        headers=master_headers,
+    )
+    assert complete_response.status_code == 200, complete_response.json()
+    assert complete_response.json()["status"] == "done"
+
+    # The client can now submit a review for the master.
+    review_response = client.post(
+        f"/issues/{issue_id}/review",
+        headers=owner_headers,
+        json=review_payload(4),
+    )
+
+    assert review_response.status_code == 201, review_response.json()
+
+    body = review_response.json()
+    assert body["issue_id"] == issue_id
+    assert body["master_id"] == master_id
+    assert body["company_id"] is None
+    assert body["rating"] == 4
+
+    with test_session_factory() as db:
+        issue = db.get(Issue, issue_id)
+        review = db.scalar(
+            select(Review).where(Review.issue_id == issue_id)
+        )
+        master = db.get(Master, master_id)
+
+        assert issue is not None
+        assert issue.status == IssueStatus.DONE
+        assert issue.review_target_unknown is False
+
+        assert review is not None
+        assert review.master_id == master_id
+        assert review.company_id is None
+        assert review.rating == 4
+
+        assert master is not None
+        assert master.rating == Decimal("4.00")
+        assert master.reviews_count == 1

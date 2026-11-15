@@ -35,6 +35,7 @@ def upgrade() -> None:
         WHERE assignee_master_id IS NOT NULL
           AND assignee_company_id IS NULL
           AND review_company_id IS NULL
+          AND status <> 'sent'
         """
     )
 
