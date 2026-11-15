@@ -4,6 +4,7 @@ from app.models.base import Base
 from app.models.catalog import Category, Service
 from app.models.company import Company, CompanyService
 from app.models.issue import Issue, IssueStatus
+from app.models.issue_status_event import IssueStatusEvent
 from app.models.master import Master, MasterService
 from app.models.order import Order, OrderStatus
 from app.models.refresh_token import RefreshToken
@@ -23,6 +24,7 @@ __all__ = [
     "CompanyService",
     "Issue",
     "IssueStatus",
+    "IssueStatusEvent",
     "Master",
     "MasterService",
     "Order",

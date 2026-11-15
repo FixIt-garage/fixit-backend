@@ -50,7 +50,9 @@ def test_patch_updates_only_sent_fields(client: TestClient, category_ids: list[i
     created = create_issue(client, headers, category_ids[0])
 
     response = client.patch(
-        f"/issues/{created['id']}", json={"title": "New title"}, headers=headers
+        f"/issues/{created['id']}",
+        json={"title": "New title", "district": "Франківський"},
+        headers=headers,
     )
 
     assert response.status_code == 200
@@ -60,9 +62,10 @@ def test_patch_updates_only_sent_fields(client: TestClient, category_ids: list[i
     assert body["category_id"] == created["category_id"]
     assert body["address"] == created["address"]
     assert body["status"] == "sent"
+    assert body["district"] == "Франківський"
 
 
-def test_patch_can_change_status_category_and_address(
+def test_patch_cannot_change_status_but_can_update_other_fields(
     client: TestClient, category_ids: list[int]
 ) -> None:
     headers = auth_headers(client)
@@ -74,11 +77,10 @@ def test_patch_can_change_status_category_and_address(
         headers=headers,
     )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["status"] == "in_progress"
-    assert body["category_id"] == category_ids[1]
-    assert body["address"] == "Kyiv"
+    assert response.status_code == 422
+
+    detail = response.json()["detail"]
+    assert any(error["loc"][-1] == "status" for error in detail)
 
 
 def test_patch_is_saved_in_database(
@@ -166,11 +168,10 @@ def test_patch_with_unknown_category_is_rejected(
         {"title": None},
         {"description": None},
         {"category_id": None},
-        {"status": None},
         {"title": "   "},
         {"description": "x" * 501},
-        {"status": "unknown"},
         {"category_id": 0},
+        {"status": "in_progress"},
     ],
 )
 def test_patch_with_invalid_body_is_rejected(
