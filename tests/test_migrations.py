@@ -532,3 +532,165 @@ def test_review_migration_marks_accepted_company_issues_as_unknown() -> None:
             assert direct_issue.review_target_unknown is False
         finally:
             engine.dispose()
+
+
+@requires_db
+def test_service_center_migration_backfills_legacy_companies() -> None:
+    with disposable_database() as url:
+        _assert_connected_to(url)
+        config = _alembic_config(url)
+
+        # Build the database immediately before the service center migration.
+        command.upgrade(config, "5571b786cd03")
+
+        engine = create_engine(url)
+        try:
+            with engine.begin() as conn:
+                category_id = conn.execute(
+                    text("SELECT id FROM categories ORDER BY id LIMIT 1")
+                ).scalar_one()
+
+                owner_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO users (
+                            email, password_hash, first_name, last_name
+                        )
+                        VALUES (
+                            'legacy-center-owner@example.com',
+                            'hash',
+                            'Legacy',
+                            'Owner'
+                        )
+                        RETURNING id
+                        """
+                    )
+                ).scalar_one()
+
+                # Legacy company: type was not populated.
+                company_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO companies (name, type)
+                        VALUES ('Legacy Service Center', NULL)
+                        RETURNING id
+                        """
+                    )
+                ).scalar_one()
+
+                issue_id = conn.execute(
+                    text(
+                        """
+                        INSERT INTO issues (
+                            title,
+                            description,
+                            category_id,
+                            status,
+                            owner_id,
+                            assignee_company_id,
+                            review_company_id,
+                            created_at,
+                            updated_at
+                        )
+                        VALUES (
+                            'Legacy service request',
+                            'Request assigned to a legacy company',
+                            :category_id,
+                            'done',
+                            :owner_id,
+                            :company_id,
+                            :company_id,
+                            now(),
+                            now()
+                        )
+                        RETURNING id
+                        """
+                    ),
+                    {
+                        "category_id": category_id,
+                        "owner_id": owner_id,
+                        "company_id": company_id,
+                    },
+                ).scalar_one()
+
+                # A review already references the legacy company.
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO reviews (
+                            issue_id,
+                            author_id,
+                            company_id,
+                            rating,
+                            tags,
+                            comment
+                        )
+                        VALUES (
+                            :issue_id,
+                            :author_id,
+                            :company_id,
+                            5,
+                            '[]'::json,
+                            'Good service'
+                        )
+                        """
+                    ),
+                    {
+                        "issue_id": issue_id,
+                        "author_id": owner_id,
+                        "company_id": company_id,
+                    },
+                )
+
+            # Apply the service center migration.
+            command.upgrade(config, "head")
+
+            with engine.connect() as conn:
+                company = conn.execute(
+                    text(
+                        """
+                        SELECT id, type, public_id
+                        FROM companies
+                        WHERE id = :company_id
+                        """
+                    ),
+                    {"company_id": company_id},
+                ).one()
+
+                issue = conn.execute(
+                    text(
+                        """
+                        SELECT assignee_company_id, review_company_id
+                        FROM issues
+                        WHERE id = :issue_id
+                        """
+                    ),
+                    {"issue_id": issue_id},
+                ).one()
+
+                review_company_id = conn.execute(
+                    text(
+                        """
+                        SELECT company_id
+                        FROM reviews
+                        WHERE issue_id = :issue_id
+                        """
+                    ),
+                    {"issue_id": issue_id},
+                ).scalar_one()
+
+            # The legacy company is now recognized as a service center.
+            assert company.type == "service_center"
+
+            # Its internal ID is preserved, and it receives a separate public ID.
+            assert company.id == company_id
+            assert company.public_id >= 1000
+            assert company.public_id != company.id
+
+            # Existing issue and review relationships still reference its internal ID.
+            assert issue.assignee_company_id == company_id
+            assert issue.review_company_id == company_id
+            assert review_company_id == company_id
+
+        finally:
+            engine.dispose()

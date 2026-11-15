@@ -48,6 +48,16 @@ def upgrade() -> None:
         """
     )
 
+    # Existing companies represent service centers.
+    # Backfill the type for legacy rows created before it was populated.
+    op.execute(
+        """
+        UPDATE companies
+        SET type = 'service_center'
+        WHERE type IS NULL
+        """
+    )
+
     op.alter_column(
         "companies",
         "public_id",

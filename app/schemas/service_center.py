@@ -55,6 +55,7 @@ class ServiceCenterLocation(BaseModel):
 class ServiceCenterRead(BaseModel):
     """Full public service center profile."""
 
+    id: int
     public_id: int
     name: str
     address: str | None

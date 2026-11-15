@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from app.core.security import create_access_token
 from app.models.catalog import Category, Service
 from app.models.company import Company
+from app.models.issue import Issue
 from app.models.user import User, UserRole
 from app.schemas.service_center import OpeningInterval, ServiceCenterUpdate
 from app.services.service_center import get_working_status
@@ -124,6 +125,76 @@ def test_get_service_center_returns_full_profile(
         "open": "09:00",
         "close": "19:00",
     }
+
+
+def test_service_center_profile_ids_work_for_reviews_and_issue_assignment(
+    client: TestClient,
+    test_session_factory,
+) -> None:
+    with test_session_factory() as db:
+        owner = create_user(
+            db,
+            "integration-center-owner@example.com",
+            UserRole.SERVICE_CENTER,
+        )
+        client_user = create_user(
+            db,
+            "integration-client@example.com",
+            UserRole.CLIENT,
+        )
+        company = create_service_center(db, owner)
+
+        company_id = company.id
+        public_id = company.public_id
+        category_id = company.categories[0].id
+        token = create_access_token(str(client_user.id))
+
+        db.commit()
+
+    # 1. Fetch the public profile using public_id.
+    profile_response = client.get(f"/service-centers/{public_id}")
+
+    assert profile_response.status_code == 200
+    profile = profile_response.json()
+
+    assert profile["public_id"] == public_id
+    assert profile["id"] == company_id
+    assert profile["id"] != profile["public_id"]
+
+    # 2. Fetch reviews using the internal company ID from the profile.
+    reviews_response = client.get(f"/service-centers/{profile['id']}/reviews")
+
+    assert reviews_response.status_code == 200
+    reviews = reviews_response.json()
+
+    assert reviews["total"] == 0
+    assert reviews["items"] == []
+
+    # 3. Create an issue assigned to the same service center.
+    issue_response = client.post(
+        "/issues",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "title": "Broken washing machine",
+            "description": "The washing machine does not start",
+            "category_id": category_id,
+            "address": "Lviv, Test Street 1",
+            "assignee_company_id": profile["id"],
+        },
+    )
+
+    assert issue_response.status_code == 201, issue_response.json()
+    issue_body = issue_response.json()
+
+    assert issue_body["assignee_company_id"] == company_id
+    assert issue_body["assignee_company_id"] != public_id
+
+    # 4. Verify the issue is linked to the correct company in the database.
+    with test_session_factory() as db:
+        issue = db.get(Issue, issue_body["id"])
+
+        assert issue is not None
+        assert issue.assignee_company_id == company_id
 
 
 def test_get_unknown_service_center_returns_404(

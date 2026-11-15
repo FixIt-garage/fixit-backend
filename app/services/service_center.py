@@ -93,6 +93,7 @@ def build_service_center_read(
     )
 
     return ServiceCenterRead(
+        id=company.id,
         public_id=company.public_id,
         name=company.name,
         address=company.address,
