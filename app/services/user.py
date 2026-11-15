@@ -7,6 +7,7 @@ from app.models.master import Master
 from app.models.review import Review
 from app.models.user import User, UserRole
 from app.schemas.user import UserProfileResponse, UserStats, UserUpdate
+from app.services.completeness import calculate_completeness
 
 
 def count_requests(db: Session, user: User) -> int:
@@ -50,6 +51,7 @@ def get_profile(db: Session, user: User) -> UserProfileResponse:
             reviews_count=count_reviews(db, user),
             member_since_year=user.created_at.year,
         ),
+        completeness=calculate_completeness(user),
     )
 
 
