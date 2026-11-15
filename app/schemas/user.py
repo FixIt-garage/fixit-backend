@@ -12,6 +12,11 @@ class UserStats(BaseModel):
     member_since_year: int
 
 
+class ProfileCompleteness(BaseModel):
+    percent: int
+    next_field: str | None
+
+
 class UserProfileResponse(BaseModel):
     id: int
     public_id: int
@@ -24,6 +29,7 @@ class UserProfileResponse(BaseModel):
     avatar_url: str | None
     role: UserRole
     stats: UserStats
+    completeness: ProfileCompleteness
 
 
 class UserUpdate(BaseModel):
