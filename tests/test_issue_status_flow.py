@@ -1,8 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
-from threading import Barrier
+from datetime import datetime
+from threading import Barrier, Event
 
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.security import create_access_token
 from app.models.catalog import Category
@@ -618,3 +619,114 @@ def test_all_invalid_status_transitions_are_rejected(
                 assert issue.status == initial_status
                 assert len(events) == 1
                 assert events[0].status == IssueStatus.SENT
+
+def test_status_timeline_follows_transition_order_when_transaction_starts_earlier(
+    client: TestClient,
+    test_session_factory,
+) -> None:
+    with test_session_factory() as db:
+        category_id = db.scalar(select(Category.id).order_by(Category.id))
+        assert category_id is not None
+
+        owner = create_test_user(
+            db,
+            "timeline-owner@example.com",
+            UserRole.CLIENT,
+        )
+        master_user = create_test_user(
+            db,
+            "timeline-master@example.com",
+            UserRole.MASTER,
+        )
+
+        master = Master(user_id=master_user.id)
+        db.add(master)
+        db.commit()
+
+        owner_token = create_access_token(str(owner.id))
+        owner_id = owner.id
+        master_user_id = master_user.id
+        master_id = master.id
+
+    create_response = client.post(
+        "/issues",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={
+            "title": "Timeline concurrency test",
+            "description": "Verify chronological status timeline",
+            "category_id": category_id,
+            "assignee_master_id": master_id,
+        },
+    )
+    assert create_response.status_code == 201, create_response.json()
+    issue_id = create_response.json()["id"]
+
+    cancel_transaction_started = Event()
+    allow_cancel_transition = Event()
+
+    def begin_cancel_transaction():
+        with test_session_factory() as db:
+            actor = db.get(User, owner_id)
+            assert actor is not None
+
+            transaction_started_at = db.scalar(select(func.now()))
+            assert transaction_started_at is not None
+
+            cancel_transaction_started.set()
+
+            if not allow_cancel_transition.wait(timeout=10):
+                raise TimeoutError("Cancel transition was not released")
+
+            transition_issue(
+                db,
+                issue_id,
+                actor,
+                IssueStatus.CANCELLED,
+            )
+
+            return transaction_started_at
+
+    def accept_issue() -> None:
+        with test_session_factory() as db:
+            actor = db.get(User, master_user_id)
+            assert actor is not None
+
+            transition_issue(
+                db,
+                issue_id,
+                actor,
+                IssueStatus.ACCEPTED,
+            )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        cancel_future = executor.submit(begin_cancel_transaction)
+
+        assert cancel_transaction_started.wait(timeout=10)
+
+        try:
+            accept_future = executor.submit(accept_issue)
+            accept_future.result(timeout=30)
+        finally:
+            allow_cancel_transition.set()
+
+        cancel_transaction_started_at = cancel_future.result(timeout=30)
+
+    detail_response = client.get(
+        f"/issues/{issue_id}",
+        headers={"Authorization": f"Bearer {owner_token}"},
+    )
+    assert detail_response.status_code == 200, detail_response.json()
+
+    timeline = detail_response.json()["timeline"]
+
+    assert [event["status"] for event in timeline] == [
+        "sent",
+        "accepted",
+        "cancelled",
+    ]
+
+    accepted_at = datetime.fromisoformat(timeline[1]["created_at"])
+    cancelled_at = datetime.fromisoformat(timeline[2]["created_at"])
+
+    assert cancel_transaction_started_at < accepted_at
+    assert accepted_at <= cancelled_at
