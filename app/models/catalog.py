@@ -19,6 +19,12 @@ class Category(Base):
     parent = relationship("Category", remote_side=[id], back_populates="children")
     children = relationship("Category", back_populates="parent", passive_deletes="all")
 
+    companies = relationship(
+        "Company",
+        secondary="company_categories",
+        back_populates="categories",
+    )
+
 
 class Service(Base):
     __tablename__ = "services"
