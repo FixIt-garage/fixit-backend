@@ -1,10 +1,11 @@
 import hashlib
+import logging
 from datetime import UTC, datetime
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -30,6 +31,7 @@ from app.schemas.auth import (
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 bearer_scheme = HTTPBearer()
+logger = logging.getLogger(__name__)
 
 def _hash_refresh_token(token: str) -> str:
     """Return a SHA-256 hash of a refresh token."""
@@ -61,6 +63,23 @@ def _create_token_pair(user: User, db: Session) -> TokenResponse:
     )
 
 
+def find_user_by_email(db: Session, email: str) -> User | None:
+    """Find the user to log in; the email is compared without regard to case.
+
+    Old accounts could differ only by case (the unique index is case-sensitive). When several
+    accounts match, only the one spelled exactly as typed is accepted. The lookup never
+    guesses, so nobody gets another user's account or loses their own.
+    """
+    candidates = db.scalars(select(User).where(func.lower(User.email) == email.lower())).all()
+    if len(candidates) > 1:
+        logger.warning(
+            "Accounts %s share an email that differs only by case",
+            [user.id for user in candidates],
+        )
+        return next((user for user in candidates if user.email == email), None)
+    return candidates[0] if candidates else None
+
+
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def register(
     request: RegisterRequest,
@@ -68,7 +87,7 @@ def register(
 ) -> TokenResponse:
     """Register a new user and return a token pair."""
     existing_user = db.scalar(
-        select(User).where(User.email == str(request.email))
+        select(User).where(func.lower(User.email) == request.email)
     )
 
     if existing_user:
@@ -139,9 +158,7 @@ def login(
     db: Session = Depends(get_db),
 ) -> TokenResponse:
     """Authenticate a user and return a token pair."""
-    user = db.scalar(
-        select(User).where(User.email == str(request.email))
-    )
+    user = find_user_by_email(db, request.email)
 
     if (
         user is None
