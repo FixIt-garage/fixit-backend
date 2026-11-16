@@ -57,3 +57,66 @@ def test_different_users_have_their_own_organizations(test_session_factory) -> N
 
         total = db.scalar(select(func.count()).select_from(VolunteerOrganization))
         assert total == 2
+
+
+from alembic import command  # noqa: E402
+from sqlalchemy import create_engine, text  # noqa: E402
+
+from tests.test_migrations import (  # noqa: E402
+    _alembic_config,
+    _assert_connected_to,
+    disposable_database,
+    requires_db,
+)
+
+PRE_REVISION = "232d55a844e1"
+
+
+@requires_db
+def test_migration_stops_on_an_owner_with_two_organizations() -> None:
+    with disposable_database() as url:
+        _assert_connected_to(url)
+        config = _alembic_config(url)
+        command.upgrade(config, PRE_REVISION)
+        engine = create_engine(url)
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "INSERT INTO users (email, password_hash, first_name, last_name) "
+                        "VALUES ('org@example.com', 'hash', 'Test', 'Owner')"
+                    )
+                )
+                owner_id = conn.execute(text("SELECT id FROM users")).scalar_one()
+                for name in ("First", "Second"):
+                    conn.execute(
+                        text(
+                            "INSERT INTO volunteer_organizations (owner_user_id, name) "
+                            "VALUES (:owner, :name)"
+                        ),
+                        {"owner": owner_id, "name": name},
+                    )
+                first_id = conn.execute(
+                    text("SELECT id FROM volunteer_organizations WHERE name = 'First'")
+                ).scalar_one()
+                conn.execute(
+                    text(
+                        "INSERT INTO volunteer_requests (organization_id, title, description) "
+                        "VALUES (:org, 'Help', 'Needed')"
+                    ),
+                    {"org": first_id},
+                )
+
+            with pytest.raises(Exception, match="more than one volunteer organization"):
+                command.upgrade(config, "head")
+
+            with engine.connect() as conn:
+                organizations = conn.execute(
+                    text("SELECT count(*) FROM volunteer_organizations")
+                ).scalar_one()
+                requests = conn.execute(
+                    text("SELECT count(*) FROM volunteer_requests")
+                ).scalar_one()
+            assert (organizations, requests) == (2, 1)
+        finally:
+            engine.dispose()
