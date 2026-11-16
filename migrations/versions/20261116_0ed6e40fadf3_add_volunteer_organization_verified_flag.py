@@ -20,25 +20,28 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     # One organization per owner is new. Stop before changing anything if the data breaks it:
-    # which organization to keep, and where their volunteer requests go, is a decision for people.
-    duplicates = (
-        op.get_bind()
-        .execute(
-            sa.text(
-                "SELECT owner_user_id FROM volunteer_organizations "
-                "GROUP BY owner_user_id HAVING count(*) > 1"
-            )
-        )
-        .scalars()
-        .all()
+    # which organization to keep, and where their volunteer requests go, is a decision for
+    # people. The check is a DO block, so it also runs from the SQL made with `--sql`.
+    op.execute(
+        """
+        DO $$
+        DECLARE
+            owners integer;
+        BEGIN
+            SELECT count(*) INTO owners FROM (
+                SELECT owner_user_id FROM volunteer_organizations
+                GROUP BY owner_user_id HAVING count(*) > 1
+            ) AS duplicated;
+            IF owners > 0 THEN
+                RAISE EXCEPTION
+                    '% user(s) own more than one volunteer organization. Resolve them by hand, '
+                    'keeping the volunteer requests of every organization, then run the '
+                    'migration again. Nothing was changed.', owners;
+            END IF;
+        END
+        $$;
+        """
     )
-    if duplicates:
-        raise RuntimeError(
-            f"{len(duplicates)} user(s) own more than one volunteer organization "
-            f"(owner_user_id: {duplicates}). Resolve them by hand, keeping the volunteer "
-            "requests (volunteer_requests.organization_id) of every organization, then run "
-            "the migration again. Nothing was changed."
-        )
 
     op.add_column(
         "volunteer_organizations",

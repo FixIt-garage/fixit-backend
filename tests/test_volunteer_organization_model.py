@@ -120,3 +120,14 @@ def test_migration_stops_on_an_owner_with_two_organizations() -> None:
             assert (organizations, requests) == (2, 1)
         finally:
             engine.dispose()
+
+
+@requires_db
+def test_generated_sql_contains_the_duplicate_check(capsys) -> None:
+    with disposable_database() as url:
+        command.upgrade(_alembic_config(url), f"{PRE_REVISION}:0ed6e40fadf3", sql=True)
+        script = capsys.readouterr().out
+
+    assert "more than one volunteer organization" in script
+    assert script.index("DO $$") < script.index("ADD COLUMN is_verified")
+    assert "uq_volunteer_organizations_owner_user_id" in script
