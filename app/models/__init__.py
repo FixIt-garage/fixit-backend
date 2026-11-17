@@ -2,6 +2,7 @@
 
 from app.models.base import Base
 from app.models.catalog import Category, Service
+from app.models.chat import Conversation, Message
 from app.models.company import Company, CompanyCategory, CompanyService
 from app.models.issue import Issue, IssueStatus
 from app.models.issue_status_event import IssueStatusEvent
@@ -23,12 +24,14 @@ __all__ = [
     "Company",
     "CompanyCategory",
     "CompanyService",
+    "Conversation",
     "Issue",
     "IssueStatus",
     "IssueStatusEvent",
     "Master",
     "MasterCategory",
     "MasterService",
+    "Message",
     "Order",
     "OrderStatus",
     "RefreshToken",
