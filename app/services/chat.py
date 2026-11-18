@@ -38,7 +38,13 @@ class ConversationSummary:
 
 
 def _add_message(db: Session, conversation: Conversation, message: Message) -> Message:
-    """Store a message and move the conversation's last-message time to it."""
+    """Store a message and move the conversation's last-message time to it.
+
+    PostgreSQL hands out ids before commit, so two senders could commit in the opposite order
+    and polling with `after=<id>` would skip the message that became visible later. Locking the
+    conversation row until commit keeps the ids of one conversation in commit order.
+    """
+    db.execute(select(Conversation.id).where(Conversation.id == conversation.id).with_for_update())
     db.add(message)
     db.flush()
     db.refresh(message)

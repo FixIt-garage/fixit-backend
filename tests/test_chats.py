@@ -1,5 +1,6 @@
 """Chats (FIX-31): opened when a master accepts an issue, readable only by its two participants."""
 
+import threading
 from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
@@ -11,6 +12,7 @@ from app.models.chat import Conversation, Message
 from app.models.company import Company
 from app.models.master import Master
 from app.models.user import User, UserRole
+from app.services import chat as chat_service
 from app.services.chat import ISSUE_ACCEPTED_TEXT
 
 
@@ -166,6 +168,66 @@ def test_participants_exchange_messages_and_see_unread_counts(
         master_message = db.get(Message, reply.json()["id"])
         assert owner_message is not None and owner_message.read_at is not None
         assert master_message is not None and master_message.read_at is None
+
+
+def test_polling_never_skips_a_message_sent_at_the_same_time(
+    client: TestClient,
+    test_session_factory,
+) -> None:
+    owner, master, _, _, conversation_id = accepted_chat(client, test_session_factory)
+    url = f"/conversations/{conversation_id}/messages"
+    cursor = client.get(url, headers=owner.headers).json()["items"][0]["id"]
+
+    inserted = threading.Event()
+    release = threading.Event()
+    sent: dict[str, Message] = {}
+
+    client_db = test_session_factory()
+    master_db = test_session_factory()
+    try:
+        # The client's message gets its id first, but its transaction commits only on release.
+        client_commit = client_db.commit
+
+        def held_commit() -> None:
+            inserted.set()
+            assert release.wait(timeout=10)
+            client_commit()
+
+        client_db.commit = held_commit
+
+        def send(db, user_id: int, name: str) -> None:
+            conversation = db.get(Conversation, conversation_id)
+            sender = db.get(User, user_id)
+            sent[name] = chat_service.send_message(
+                db, conversation, sender, text=name, photo_url=None
+            )
+
+        client_sender = threading.Thread(target=send, args=(client_db, owner.user_id, "client"))
+        master_sender = threading.Thread(target=send, args=(master_db, master.user_id, "master"))
+
+        client_sender.start()
+        assert inserted.wait(timeout=10)
+        master_sender.start()
+
+        # The master's message must wait for the client's transaction, so nothing newer than
+        # the client's uncommitted message can become visible to a poller first.
+        master_sender.join(timeout=1)
+        assert master_sender.is_alive()
+        polled = client.get(url, headers=master.headers, params={"after": cursor}).json()
+        assert polled["items"] == []
+
+        release.set()
+        client_sender.join(timeout=10)
+        master_sender.join(timeout=10)
+        assert not client_sender.is_alive() and not master_sender.is_alive()
+    finally:
+        release.set()
+        client_db.close()
+        master_db.close()
+
+    assert sent["client"].id < sent["master"].id
+    polled = client.get(url, headers=master.headers, params={"after": cursor}).json()
+    assert [item["text"] for item in polled["items"]] == ["client", "master"]
 
 
 def test_message_must_have_valid_content(client: TestClient, test_session_factory) -> None:
