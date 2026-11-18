@@ -9,8 +9,14 @@ from app.models.issue import IssueStatus
 from app.models.master import Master
 from app.models.user import User, UserRole
 from app.schemas.issue import MasterRequestRead
+from app.schemas.master import (
+    MasterProfileRead,
+    MasterProfileUpdate,
+    MasterVolunteerUpdate,
+)
 from app.schemas.review import ReviewListRead
 from app.services import issue as issue_service
+from app.services import master as master_service
 from app.services import review as review_service
 
 router = APIRouter(prefix="/masters", tags=["Masters"])
@@ -30,6 +36,28 @@ def get_my_requests(
         status=status_filter,
     )
 
+
+@router.patch("/me", response_model=MasterProfileRead)
+def update_my_profile(
+    data: MasterProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(master_required),
+) -> MasterProfileRead:
+    """Partially save the current master's profile (the form can be finished later)."""
+    try:
+        return master_service.update_profile(db, current_user, data)
+    except master_service.CategoryNotFoundError as exc:
+        raise HTTPException(status_code=422, detail="Category not found") from exc
+
+
+@router.patch("/me/volunteer", response_model=MasterProfileRead)
+def update_my_volunteer_flag(
+    data: MasterVolunteerUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(master_required),
+) -> MasterProfileRead:
+    """Toggle "Я волонтер" for the current master."""
+    return master_service.set_volunteer(db, current_user, data.is_volunteer)
 
 
 @router.get("/{master_id}/reviews", response_model=ReviewListRead)
