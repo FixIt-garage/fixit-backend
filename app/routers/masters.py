@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import require_role
+from app.core.dependencies import get_current_user, require_role
 from app.db import get_db
 from app.models.issue import IssueStatus
 from app.models.master import Master
@@ -12,6 +12,7 @@ from app.schemas.issue import MasterRequestRead
 from app.schemas.master import (
     MasterProfileRead,
     MasterProfileUpdate,
+    MasterPublicRead,
     MasterVolunteerUpdate,
 )
 from app.schemas.review import ReviewListRead
@@ -58,6 +59,22 @@ def update_my_volunteer_flag(
 ) -> MasterProfileRead:
     """Toggle "Я волонтер" for the current master."""
     return master_service.set_volunteer(db, current_user, data.is_volunteer)
+
+
+@router.get(
+    "/{master_id}",
+    response_model=MasterPublicRead,
+    dependencies=[Depends(get_current_user)],
+)
+def get_master(
+    master_id: int,
+    db: Session = Depends(get_db),
+) -> MasterPublicRead:
+    """Return the public profile of a master (any logged-in user can open it)."""
+    try:
+        return master_service.get_public_profile(db, master_id)
+    except master_service.MasterNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Master not found") from exc
 
 
 @router.get("/{master_id}/reviews", response_model=ReviewListRead)

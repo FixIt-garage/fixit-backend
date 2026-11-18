@@ -2,13 +2,19 @@ from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.catalog import Category
 from app.models.master import Master
 from app.models.user import User
 from app.schemas.category import CategoryRead
-from app.schemas.master import MasterCompleteness, MasterProfileRead, MasterProfileUpdate
+from app.schemas.master import (
+    MasterCompleteness,
+    MasterContacts,
+    MasterProfileRead,
+    MasterProfileUpdate,
+    MasterPublicRead,
+)
 from app.services.completeness import calculate_completeness
 
 COMPLETENESS_STEPS = 5
@@ -16,6 +22,8 @@ COMPLETENESS_STEPS = 5
 
 class CategoryNotFoundError(Exception):
     """Raised when a category id of the profile does not exist."""
+class MasterNotFoundError(Exception):
+    """Raised when the master does not exist or the account is deactivated."""
 
 
 def _to_float(value: Decimal | None) -> float | None:
@@ -119,3 +127,34 @@ def set_volunteer(db: Session, user: User, is_volunteer: bool) -> MasterProfileR
     db.commit()
     db.refresh(user)
     return build_profile(user)
+def get_public_profile(db: Session, master_id: int) -> MasterPublicRead:
+    """Public profile of a master; only contacts that are meant to be public are included."""
+    master = db.scalar(
+        select(Master)
+        .where(Master.id == master_id)
+        .options(selectinload(Master.user), selectinload(Master.categories))
+    )
+    if master is None or not master.user.is_active:
+        raise MasterNotFoundError(master_id)
+
+    user = master.user
+    return MasterPublicRead(
+        id=master.id,
+        public_id=user.public_id,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        avatar_url=user.avatar_url,
+        city=user.city,
+        district=master.district,
+        experience_years=master.experience_years,
+        call_out_price=_to_float(master.call_out_price),
+        schedule=master.schedule,
+        is_volunteer=master.is_volunteer,
+        rating=_to_float(master.rating),
+        reviews_count=master.reviews_count,
+        categories=[
+            CategoryRead.model_validate(category)
+            for category in sorted(master.categories, key=lambda category: category.id)
+        ],
+        contacts=MasterContacts(phone=user.phone),
+    )
