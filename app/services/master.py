@@ -22,6 +22,15 @@ def _to_float(value: Decimal | None) -> float | None:
     return None if value is None else float(value)
 
 
+def _lock_user(db: Session, user: User) -> None:
+    """Lock the user row first, so every write path takes locks in the same order.
+
+    The order is always users, then masters. Without it, two concurrent PATCH requests
+    (one with categories, one with city) can wait for each other and deadlock.
+    """
+    db.execute(select(User.id).where(User.id == user.id).with_for_update())
+
+
 def _get_or_create_master(db: Session, user: User) -> Master:
     """Return the master profile; the first save creates it atomically.
 
@@ -46,9 +55,7 @@ def _lock_master(db: Session, master: Master) -> None:
     The replacement of the category list is serialized: a concurrent request waits here
     until the first one commits, and then reads the up-to-date set instead of a stale one.
     """
-    db.execute(
-        select(Master.id).where(Master.id == master.id).with_for_update()
-    )
+    db.execute(select(Master.id).where(Master.id == master.id).with_for_update())
     db.refresh(master, ["categories"])
 
 
@@ -90,6 +97,7 @@ def update_profile(db: Session, user: User, data: MasterProfileUpdate) -> Master
         if len(categories) != len(ids):
             raise CategoryNotFoundError(sorted(ids))
 
+    _lock_user(db, user)
     master = _get_or_create_master(db, user)
     if categories is not None:
         _lock_master(db, master)
@@ -105,6 +113,7 @@ def update_profile(db: Session, user: User, data: MasterProfileUpdate) -> Master
 
 
 def set_volunteer(db: Session, user: User, is_volunteer: bool) -> MasterProfileRead:
+    _lock_user(db, user)
     master = _get_or_create_master(db, user)
     master.is_volunteer = is_volunteer
     db.commit()
