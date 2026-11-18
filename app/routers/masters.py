@@ -37,7 +37,12 @@ def get_my_requests(
         status=status_filter,
     )
 
-
+@router.get("/me", response_model=MasterProfileRead)
+def get_my_profile(
+    current_user: User = Depends(master_required),
+) -> MasterProfileRead:
+    """Return the current master's own profile (empty until the first save)."""
+    return master_service.get_own_profile(current_user)
 @router.patch("/me", response_model=MasterProfileRead)
 def update_my_profile(
     data: MasterProfileUpdate,

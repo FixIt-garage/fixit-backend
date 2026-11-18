@@ -166,3 +166,58 @@ def test_me_routes_are_not_captured_by_the_public_profile(client: TestClient) ->
 
     assert client.get("/masters/me/requests", headers=master).status_code == 200
     assert client.get("/masters/me/requests", headers=client_headers).status_code == 403
+def test_own_profile_is_empty_before_the_first_save(client: TestClient) -> None:
+    headers = master_headers(client)
+
+    response = client.get("/masters/me", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] is None
+    assert body["completeness"]["filled"] == 0
+    assert body["categories"] == []
+
+
+def test_own_profile_matches_what_was_saved(client: TestClient) -> None:
+    headers = master_headers(client)
+    client.patch("/masters/me", json={"district": "Sykhiv", "experience_years": 4}, headers=headers)
+
+    body = client.get("/masters/me", headers=headers).json()
+
+    assert body["district"] == "Sykhiv"
+    assert body["experience_years"] == 4
+    assert body["completeness"]["filled"] == 1
+
+
+def test_own_profile_is_forbidden_for_a_client_and_needs_a_token(client: TestClient) -> None:
+    headers = register(client, "client@example.com")
+
+    assert client.get("/masters/me", headers=headers).status_code == 403
+    assert client.get("/masters/me").status_code == 401
+
+
+def test_master_id_differs_from_user_id(client: TestClient) -> None:
+    register(client, "first@example.com")
+    register(client, "second@example.com")
+    headers = master_headers(client, "third@example.com")
+    user_id = client.get("/users/me", headers=headers).json()["id"]
+    master_id = create_empty_master(client, headers)
+
+    assert master_id != user_id
+    assert client.get("/masters/me", headers=headers).json()["id"] == master_id
+    assert client.get(f"/masters/{master_id}", headers=headers).status_code == 200
+
+
+def test_public_profile_field_names_are_the_contract(client: TestClient) -> None:
+    master = master_headers(client)
+    master_id = create_empty_master(client, master)
+
+    body = client.get(f"/masters/{master_id}", headers=master).json()
+
+    assert set(body) == {
+        "id", "public_id", "first_name", "last_name", "avatar_url", "city",
+        "district", "experience_years", "call_out_price", "schedule",
+        "is_volunteer", "rating", "reviews_count", "categories", "contacts",
+    }
+    assert body["experience_years"] is None
+    assert body["call_out_price"] is None

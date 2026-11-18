@@ -158,3 +158,29 @@ def get_public_profile(db: Session, master_id: int) -> MasterPublicRead:
         ],
         contacts=MasterContacts(phone=user.phone),
     )
+
+
+def get_own_profile(user: User) -> MasterProfileRead:
+    """The master's own profile; empty (0 of 5) while the master has not saved anything yet."""
+    completeness = calculate_completeness(user)
+    master = user.master_profile
+    if master is None:
+        return MasterProfileRead(
+            id=None,
+            city=user.city,
+            district=None,
+            experience_years=None,
+            call_out_price=None,
+            schedule=None,
+            is_volunteer=False,
+            rating=None,
+            reviews_count=0,
+            categories=[],
+            completeness=MasterCompleteness(
+                filled=completeness.percent // 20,
+                total=COMPLETENESS_STEPS,
+                percent=completeness.percent,
+                next_field=completeness.next_field,
+            ),
+        )
+    return build_profile(user)

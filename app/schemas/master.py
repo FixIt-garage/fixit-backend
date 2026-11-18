@@ -41,7 +41,7 @@ class MasterCompleteness(BaseModel):
 
 
 class MasterProfileRead(BaseModel):
-    id: int
+    id: int | None
     city: str | None
     district: str | None
     experience_years: int | None
