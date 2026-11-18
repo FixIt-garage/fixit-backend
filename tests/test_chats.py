@@ -154,13 +154,15 @@ def test_participants_exchange_messages_and_see_unread_counts(
     assert owner_item["last_message"]["id"] == reply.json()["id"]
     assert owner_item["last_message_at"] == reply.json()["created_at"]
 
-    marked = client.post(f"/conversations/{conversation_id}/read", headers=master.headers)
+    read_url = f"/conversations/{conversation_id}/read"
+    shown = {"last_read_message_id": reply.json()["id"]}
+    marked = client.post(read_url, headers=master.headers, json=shown)
     assert marked.status_code == 200, marked.text
     assert marked.json() == {"marked_read": 1}
     assert unread(client, master) == 0
     assert unread(client, owner) == 1  # the master's reply is still unread for the client
 
-    again = client.post(f"/conversations/{conversation_id}/read", headers=master.headers)
+    again = client.post(read_url, headers=master.headers, json=shown)
     assert again.json() == {"marked_read": 0}
 
     with test_session_factory() as db:
@@ -168,6 +170,39 @@ def test_participants_exchange_messages_and_see_unread_counts(
         master_message = db.get(Message, reply.json()["id"])
         assert owner_message is not None and owner_message.read_at is not None
         assert master_message is not None and master_message.read_at is None
+
+
+def test_read_marks_only_messages_the_app_has_shown(
+    client: TestClient,
+    test_session_factory,
+) -> None:
+    owner, master, _, _, conversation_id = accepted_chat(client, test_session_factory)
+    url = f"/conversations/{conversation_id}/messages"
+    read_url = f"/conversations/{conversation_id}/read"
+
+    first = client.post(url, headers=owner.headers, json={"text": "Добрий день"}).json()
+    shown = client.get(url, headers=master.headers).json()["items"]
+    assert shown[0]["id"] == first["id"]
+
+    # The client writes again after the master's app loaded the chat but before it sent /read.
+    second = client.post(url, headers=owner.headers, json={"text": "Ви тут?"}).json()
+
+    marked = client.post(
+        read_url, headers=master.headers, json={"last_read_message_id": shown[0]["id"]}
+    )
+    assert marked.status_code == 200, marked.text
+    assert marked.json() == {"marked_read": 1}
+    assert unread(client, master) == 1
+
+    with test_session_factory() as db:
+        first_message = db.get(Message, first["id"])
+        second_message = db.get(Message, second["id"])
+        assert first_message is not None and first_message.read_at is not None
+        assert second_message is not None and second_message.read_at is None
+
+    for body in ({}, {"last_read_message_id": 0}, {"last_read_message_id": 1, "extra": 1}):
+        response = client.post(read_url, headers=master.headers, json=body)
+        assert response.status_code == 422, (body, response.text)
 
 
 def test_polling_never_skips_a_message_sent_at_the_same_time(
@@ -262,7 +297,8 @@ def test_only_participants_can_read_and_write(client: TestClient, test_session_f
     assert client.get(f"{base}/messages", headers=outsider.headers).status_code == 403
     sent = client.post(f"{base}/messages", headers=outsider.headers, json={"text": "hi"})
     assert sent.status_code == 403
-    assert client.post(f"{base}/read", headers=outsider.headers).status_code == 403
+    shown = {"last_read_message_id": 1}
+    assert client.post(f"{base}/read", headers=outsider.headers, json=shown).status_code == 403
 
     listed = client.get("/conversations", headers=outsider.headers).json()
     assert listed == {"items": [], "total": 0, "limit": 20, "offset": 0}

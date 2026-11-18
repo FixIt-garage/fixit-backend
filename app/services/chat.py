@@ -239,12 +239,23 @@ def send_message(
     return message
 
 
-def mark_read(db: Session, conversation: Conversation, reader: User) -> int:
-    """Mark the other participant's unread messages as read; return how many were marked."""
+def mark_read(
+    db: Session,
+    conversation: Conversation,
+    reader: User,
+    *,
+    last_read_message_id: int,
+) -> int:
+    """Mark the other participant's messages up to the last one shown to the reader as read.
+
+    A message that arrives after the client loaded the chat stays unread until it is shown.
+    Returns how many messages were marked.
+    """
     result = db.execute(
         update(Message)
         .where(
             Message.conversation_id == conversation.id,
+            Message.id <= last_read_message_id,
             Message.is_system.is_(False),
             Message.sender_id != reader.id,
             Message.read_at.is_(None),

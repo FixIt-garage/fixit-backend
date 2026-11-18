@@ -89,5 +89,13 @@ class ConversationListRead(BaseModel):
     offset: int
 
 
+class ConversationReadRequest(BaseModel):
+    """The id of the newest message the client has shown; later messages stay unread."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    last_read_message_id: int = Field(ge=1)
+
+
 class ConversationReadResult(BaseModel):
     marked_read: int

@@ -9,6 +9,7 @@ from app.models.chat import Conversation, Message
 from app.models.user import User
 from app.schemas.chat import (
     ConversationListRead,
+    ConversationReadRequest,
     ConversationReadResult,
     MessageCreate,
     MessagePageRead,
@@ -102,9 +103,20 @@ def send_message(
 @router.post("/{conversation_id}/read", response_model=ConversationReadResult)
 def mark_read(
     conversation_id: int,
+    data: ConversationReadRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Mark the other participant's messages in this chat as read."""
+    """Mark the other participant's messages up to `last_read_message_id` as read.
+
+    Send the id of the newest message the app has shown, so a message that arrived in the
+    meantime stays unread.
+    """
     conversation = get_participant_conversation(db, conversation_id, current_user)
-    return {"marked_read": chat_service.mark_read(db, conversation, current_user)}
+    marked = chat_service.mark_read(
+        db,
+        conversation,
+        current_user,
+        last_read_message_id=data.last_read_message_id,
+    )
+    return {"marked_read": marked}
