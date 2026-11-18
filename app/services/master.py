@@ -40,6 +40,18 @@ def _get_or_create_master(db: Session, user: User) -> Master:
     return user.master_profile
 
 
+def _lock_master(db: Session, master: Master) -> None:
+    """Lock the master row and reload it with its current categories.
+
+    The replacement of the category list is serialized: a concurrent request waits here
+    until the first one commits, and then reads the up-to-date set instead of a stale one.
+    """
+    db.execute(
+        select(Master.id).where(Master.id == master.id).with_for_update()
+    )
+    db.refresh(master, ["categories"])
+
+
 def build_profile(user: User) -> MasterProfileRead:
     """The master's own profile with the "N of 5" completeness."""
     master = user.master_profile
@@ -80,6 +92,7 @@ def update_profile(db: Session, user: User, data: MasterProfileUpdate) -> Master
 
     master = _get_or_create_master(db, user)
     if categories is not None:
+        _lock_master(db, master)
         master.categories = categories
     if "city" in changes:
         user.city = changes.pop("city")

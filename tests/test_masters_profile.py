@@ -229,3 +229,25 @@ def test_two_first_saves_with_separate_sessions_do_not_conflict(
     assert len(masters) == 1
     assert masters[0].district == "Sykhiv"
     assert masters[0].is_volunteer is True
+def test_two_category_replacements_do_not_merge_the_lists(
+    client: TestClient, test_session_factory, category_ids: list[int]
+) -> None:
+    headers = master_headers(client)
+    client.patch("/masters/me", json={"district": "Sykhiv"}, headers=headers)
+    email = "master@example.com"
+
+    with test_session_factory() as db_a, test_session_factory() as db_b:
+        user_a = db_a.scalar(select(User).where(User.email == email))
+        user_b = db_b.scalar(select(User).where(User.email == email))
+        # Both sessions read the empty category list before either of them saves.
+        assert user_a.master_profile.categories == []
+        assert user_b.master_profile.categories == []
+
+        update_a = MasterProfileUpdate(category_ids=[category_ids[0]])
+        update_b = MasterProfileUpdate(category_ids=[category_ids[1]])
+        master_service.update_profile(db_a, user_a, update_a)
+        master_service.update_profile(db_b, user_b, update_b)
+
+    with test_session_factory() as db:
+        master = db.scalar(select(Master))
+        assert [category.id for category in master.categories] == [category_ids[1]]
