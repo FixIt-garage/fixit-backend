@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.catalog import Category
@@ -22,9 +23,20 @@ def _to_float(value: Decimal | None) -> float | None:
 
 
 def _get_or_create_master(db: Session, user: User) -> Master:
+    """Return the master profile; the first save creates it atomically.
+
+    Two requests can both see no profile. INSERT ... ON CONFLICT DO NOTHING lets the
+    second one skip the insert instead of failing on UNIQUE(masters.user_id), and the
+    profile is read again, so both requests work with the same row.
+    """
     if user.master_profile is None:
-        db.add(Master(user=user))
-        db.flush()
+        insert_master = (
+            pg_insert(Master)
+            .values(user_id=user.id)
+            .on_conflict_do_nothing(index_elements=["user_id"])
+        )
+        db.execute(insert_master)
+        db.expire(user, ["master_profile"])
     return user.master_profile
 
 

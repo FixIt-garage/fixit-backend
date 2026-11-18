@@ -4,6 +4,9 @@ from sqlalchemy import select
 
 from app.models.catalog import Category
 from app.models.master import Master
+from app.models.user import User
+from app.schemas.master import MasterProfileUpdate
+from app.services import master as master_service
 
 
 @pytest.fixture
@@ -204,3 +207,25 @@ def test_invalid_volunteer_body_is_rejected(client: TestClient, body: dict) -> N
     response = client.patch("/masters/me/volunteer", json=body, headers=master_headers(client))
 
     assert response.status_code == 422
+
+def test_two_first_saves_with_separate_sessions_do_not_conflict(
+    client: TestClient, test_session_factory
+) -> None:
+    master_headers(client)
+    email = "master@example.com"
+
+    with test_session_factory() as db_a, test_session_factory() as db_b:
+        user_a = db_a.scalar(select(User).where(User.email == email))
+        user_b = db_b.scalar(select(User).where(User.email == email))
+        # Both sessions see "no profile yet", like two simultaneous first requests.
+        assert user_a.master_profile is None
+        assert user_b.master_profile is None
+
+        master_service.update_profile(db_a, user_a, MasterProfileUpdate(district="Sykhiv"))
+        master_service.set_volunteer(db_b, user_b, True)
+
+    with test_session_factory() as db:
+        masters = list(db.scalars(select(Master)))
+    assert len(masters) == 1
+    assert masters[0].district == "Sykhiv"
+    assert masters[0].is_volunteer is True
