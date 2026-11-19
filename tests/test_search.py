@@ -154,6 +154,8 @@ def test_search_masters_filters_sorting_and_pagination(
     assert body["offset"] == 0
     assert len(body["items"]) == 2
     assert [item["rating"] for item in body["items"]] == [4.9, 4.5]
+    assert "contacts" not in body["items"][0]
+    assert "phone" not in body["items"][0]
 
     next_page = client.get(
         "/search/masters",

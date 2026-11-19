@@ -8,8 +8,11 @@ from app.models.company import Company
 from app.models.master import Master
 from app.models.user import User, UserRole
 from app.schemas.category import CategoryRead
-from app.schemas.master import MasterContacts, MasterPublicRead
-from app.schemas.search import MasterSearchRead, ServiceCenterSearchRead
+from app.schemas.search import (
+    MasterSearchItem,
+    MasterSearchRead,
+    ServiceCenterSearchRead,
+)
 from app.services.service_center import build_service_center_read
 
 
@@ -80,7 +83,7 @@ def search_masters(
     ).all()
 
     items = [
-        MasterPublicRead(
+        MasterSearchItem(
             id=master.id,
             public_id=master.user.public_id,
             first_name=master.user.first_name,
@@ -101,7 +104,6 @@ def search_masters(
                     key=lambda category: category.id,
                 )
             ],
-            contacts=MasterContacts(phone=master.user.phone),
         )
         for master in masters
     ]
