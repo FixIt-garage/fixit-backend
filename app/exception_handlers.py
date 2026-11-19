@@ -5,7 +5,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.schemas.errors import ErrorDetail, ErrorResponse
+from app.schemas.errors import ErrorDetail, ErrorResponse, LegacyValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +26,14 @@ def error_response(
     message: str,
     details: list[ErrorDetail] | None = None,
     headers: dict[str, str] | None = None,
+    legacy_detail: str | list[LegacyValidationError] | None = None,
 ) -> JSONResponse:
-    body = ErrorResponse(code=code, message=message, details=details or [])
-    return JSONResponse(status_code=status_code, content=body.model_dump(), headers=headers)
+    body = ErrorResponse(code=code, message=message, details=details or [], detail=legacy_detail)
+    return JSONResponse(
+        status_code=status_code,
+        content=body.model_dump(mode="json", exclude_none=True),
+        headers=headers,
+    )
 
 
 async def validation_exception_handler(
@@ -41,13 +46,22 @@ async def validation_exception_handler(
         )
         for error in exc.errors()
     ]
-    return error_response(422, "validation_error", "Request validation failed", details)
+    # Old format for clients that still read detail[].loc. No "input": it may hold a password.
+    legacy = [
+        LegacyValidationError(loc=list(error["loc"]), msg=error["msg"], type=error["type"])
+        for error in exc.errors()
+    ]
+    return error_response(
+        422, "validation_error", "Request validation failed", details, legacy_detail=legacy
+    )
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
     code = HTTP_ERROR_CODES.get(exc.status_code, "http_error")
     message = exc.detail if isinstance(exc.detail, str) else "HTTP error"
-    return error_response(exc.status_code, code, message, headers=exc.headers)
+    return error_response(
+        exc.status_code, code, message, headers=exc.headers, legacy_detail=message
+    )
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
