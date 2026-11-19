@@ -9,6 +9,7 @@ from app.models.master import Master, MasterCategory, MasterService
 from app.models.order import Order, OrderStatus
 from app.models.refresh_token import RefreshToken
 from app.models.review import Review
+from app.models.upload import Upload, UploadKind
 from app.models.user import User
 from app.models.volunteer import (
     VolunteerOrganization,
@@ -34,6 +35,8 @@ __all__ = [
     "RefreshToken",
     "Review",
     "Service",
+    "Upload",
+    "UploadKind",
     "User",
     "VolunteerOrganization",
     "VolunteerParticipation",
