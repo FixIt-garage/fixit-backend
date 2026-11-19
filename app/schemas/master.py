@@ -41,7 +41,7 @@ class MasterCompleteness(BaseModel):
 
 
 class MasterProfileRead(BaseModel):
-    id: int
+    id: int | None
     city: str | None
     district: str | None
     experience_years: int | None
@@ -52,3 +52,25 @@ class MasterProfileRead(BaseModel):
     reviews_count: int
     categories: list[CategoryRead]
     completeness: MasterCompleteness
+class MasterContacts(BaseModel):
+    phone: str | None
+
+
+class MasterPublicRead(BaseModel):
+    """Public master profile. The fields are listed explicitly, so private data cannot leak."""
+
+    id: int
+    public_id: int
+    first_name: str
+    last_name: str
+    avatar_url: str | None
+    city: str | None
+    district: str | None
+    experience_years: int | None
+    call_out_price: float | None
+    schedule: str | None
+    is_volunteer: bool
+    rating: float | None
+    reviews_count: int
+    categories: list[CategoryRead]
+    contacts: MasterContacts
