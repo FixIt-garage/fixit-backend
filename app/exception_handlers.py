@@ -16,6 +16,8 @@ HTTP_ERROR_CODES = {
     404: "not_found",
     405: "method_not_allowed",
     409: "conflict",
+    413: "payload_too_large",
+    415: "unsupported_media_type",
     422: "unprocessable_entity",
 }
 
