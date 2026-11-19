@@ -1,7 +1,7 @@
 """add city fields for search
 
 Revision ID: ae86550452ca
-Revises: 733d1db0bd3f
+Revises: db79dba39361
 Create Date: 2026-11-19 18:29:24.061296
 
 """
@@ -13,7 +13,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "ae86550452ca"
-down_revision: str | None = "733d1db0bd3f"
+down_revision: str | None = "db79dba39361"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
