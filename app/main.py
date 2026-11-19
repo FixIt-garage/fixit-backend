@@ -5,6 +5,7 @@ from app.config import settings
 from app.routers import (
     auth,
     categories,
+    chats,
     health,
     issues,
     masters,
@@ -24,6 +25,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(categories.router)
+app.include_router(chats.router)
 app.include_router(issues.router)
 app.include_router(masters.router)
 app.include_router(service_centers.router)
