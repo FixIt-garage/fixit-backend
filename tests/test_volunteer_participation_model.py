@@ -115,7 +115,23 @@ def test_request_lists_its_participants(test_session_factory) -> None:
         ]
 
 
-def test_participation_needs_an_existing_request_and_user(test_session_factory) -> None:
+def test_participation_needs_an_existing_request(test_session_factory) -> None:
+    with test_session_factory() as db:
+        volunteer = make_user(db, "volunteer@example.com")
+        db.commit()
+        user_id = volunteer.id
+
     with test_session_factory() as db, pytest.raises(IntegrityError):
-        db.add(VolunteerParticipation(request_id=999999, user_id=999999))
+        db.add(VolunteerParticipation(request_id=999999, user_id=user_id))
+        db.commit()
+
+
+def test_participation_needs_an_existing_user(test_session_factory) -> None:
+    with test_session_factory() as db:
+        request = make_request(db)
+        db.commit()
+        request_id = request.id
+
+    with test_session_factory() as db, pytest.raises(IntegrityError):
+        db.add(VolunteerParticipation(request_id=request_id, user_id=999999))
         db.commit()
