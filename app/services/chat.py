@@ -121,8 +121,9 @@ def list_conversations(
 
     query = (q or "").strip()
     number = query.lstrip("#")
-    if number.isdigit():
+    if re.fullmatch(r"[0-9]+", number):
         # A request number such as "1240" or "#1240" (ids above the int range match nothing).
+        # ASCII digits only: "²".isdigit() is true, but int("²") fails.
         stmt = stmt.where(Issue.id == int(number)) if len(number) <= 9 else stmt.where(false())
     elif query:
         pattern = f"%{_escape_like(query)}%"

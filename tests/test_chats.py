@@ -380,6 +380,8 @@ def test_search_by_name_or_issue_number_and_filter_by_issue(
     assert search(q="nobody") == []
     assert search(issue_id=first_issue) == [first_issue]
     assert search(q="9" * 15) == []
+    assert search(q="²") == []  # not a request number, searched as a name
+    assert search(q="#١٢") == []
 
 
 def test_company_issue_chat_is_with_the_master_who_accepted(
