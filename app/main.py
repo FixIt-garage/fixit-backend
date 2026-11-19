@@ -1,6 +1,7 @@
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
+from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.exception_handlers import register_exception_handlers
 from app.routers import (
@@ -10,6 +11,7 @@ from app.routers import (
     issues,
     masters,
     service_centers,
+    uploads,
     users,
 )
 from app.schemas.errors import ERROR_RESPONSES
@@ -32,6 +34,11 @@ app.include_router(issues.router)
 app.include_router(masters.router)
 app.include_router(service_centers.router)
 app.include_router(users.router)
+app.include_router(uploads.router)
+
+# Uploaded files are served from MEDIA_ROOT (local storage).
+Path(settings.media_root).mkdir(parents=True, exist_ok=True)
+app.mount(settings.media_url, StaticFiles(directory=settings.media_root), name="media")
 
 
 @app.get("/", response_model=RootResponse)
