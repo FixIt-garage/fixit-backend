@@ -34,7 +34,8 @@ class Company(Base):
         index=True,
     )
 
-    address: Mapped[str | None] = mapped_column(String(255))
+    address: Mapped[str | None] = mapped_column(String(255), index=True)
+    city: Mapped[str | None] = mapped_column(String(100), index=True)
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     phone: Mapped[str | None] = mapped_column(String(32))
