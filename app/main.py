@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.exception_handlers import register_exception_handlers
 from app.routers import (
     auth,
     categories,
@@ -13,8 +14,11 @@ from app.routers import (
     service_centers,
     users,
 )
+from app.schemas.errors import ERROR_RESPONSES
+from app.schemas.health import RootResponse
 
-app = FastAPI(title=settings.app_name)
+app = FastAPI(title=settings.app_name, responses=ERROR_RESPONSES)
+register_exception_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +38,6 @@ app.include_router(service_centers.router)
 app.include_router(users.router)
 
 
-@app.get("/")
-def root():
-    return {"name": settings.app_name}
+@app.get("/", response_model=RootResponse)
+def root() -> RootResponse:
+    return RootResponse(name=settings.app_name)

@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.catalog import Category
@@ -72,6 +72,20 @@ def create_issue(db: Session, data: IssueCreate, owner: User) -> Issue:
     return issue
 
 
+def _owner_issues_query(
+    owner: User,
+    status: IssueStatus | None = None,
+    category_id: int | None = None,
+) -> Select[tuple[Issue]]:
+    """Base query: the owner's non-deleted issues with optional filters."""
+    query = select(Issue).where(Issue.owner_id == owner.id, Issue.deleted_at.is_(None))
+    if status is not None:
+        query = query.where(Issue.status == status)
+    if category_id is not None:
+        query = query.where(Issue.category_id == category_id)
+    return query
+
+
 def list_issues(
     db: Session,
     owner: User,
@@ -80,17 +94,12 @@ def list_issues(
     offset: int,
     status: IssueStatus | None = None,
     category_id: int | None = None,
-) -> list[Issue]:
-    """Return the owner's issues, newest first, with optional filters and pagination."""
-    query = select(Issue).where(Issue.owner_id == owner.id, Issue.deleted_at.is_(None))
-
-    if status is not None:
-        query = query.where(Issue.status == status)
-    if category_id is not None:
-        query = query.where(Issue.category_id == category_id)
-
-    query = query.order_by(Issue.created_at.desc(), Issue.id.desc()).limit(limit).offset(offset)
-    return list(db.scalars(query))
+) -> tuple[list[Issue], int]:
+    """Return one page of the owner's issues (newest first) and the total count."""
+    query = _owner_issues_query(owner, status, category_id)
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    page = query.order_by(Issue.created_at.desc(), Issue.id.desc()).limit(limit).offset(offset)
+    return list(db.scalars(page)), total
 
 
 def list_my_issues(
