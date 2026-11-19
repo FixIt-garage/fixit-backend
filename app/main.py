@@ -3,7 +3,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.exception_handlers import register_exception_handlers
-from app.routers import auth, categories, health, issues
+from app.routers import (
+    auth,
+    categories,
+    health,
+    issues,
+    masters,
+    service_centers,
+    users,
+)
 from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.health import RootResponse
 
@@ -21,6 +29,9 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(categories.router)
 app.include_router(issues.router)
+app.include_router(masters.router)
+app.include_router(service_centers.router)
+app.include_router(users.router)
 
 
 @app.get("/", response_model=RootResponse)

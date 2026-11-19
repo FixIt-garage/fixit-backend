@@ -33,6 +33,11 @@ class User(Base):
         Integer, Sequence("users_public_id_seq", start=1000), unique=True
     )
 
+    service_centers = relationship(
+        "Company",
+        back_populates="owner",
+    )
+
     role: Mapped[UserRole] = mapped_column(
         SQLAlchemyEnum(
             UserRole,

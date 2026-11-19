@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -13,11 +13,17 @@ class VolunteerOrganization(Base):
     __tablename__ = "volunteer_organizations"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    owner_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    owner_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
     name: Mapped[str] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
     address: Mapped[str | None] = mapped_column(String(255))
     contact: Mapped[str | None] = mapped_column(String(255))
+    is_verified: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        server_default="false",
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     owner = relationship("User")
@@ -38,7 +44,11 @@ class VolunteerRequest(Base):
     organization_id: Mapped[int] = mapped_column(ForeignKey("volunteer_organizations.id"))
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text)
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="RESTRICT"), index=True
+    )
     address: Mapped[str | None] = mapped_column(String(255))
+    city: Mapped[str | None] = mapped_column(String(100), index=True)
     event_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     volunteers_needed: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[VolunteerRequestStatus] = mapped_column(
@@ -49,6 +59,7 @@ class VolunteerRequest(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     organization = relationship("VolunteerOrganization", back_populates="requests")
+    category = relationship("Category")
     participants = relationship("User", secondary="volunteer_participations")
 
 

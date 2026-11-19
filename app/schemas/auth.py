@@ -2,18 +2,21 @@ from pydantic import EmailStr, Field
 
 from app.models.user import UserRole
 from app.schemas.base import BaseSchema, RequestSchema
+from app.schemas.validators import Address, Email, LoginEmail, Phone
 
 
 class RegisterRequest(RequestSchema):
-    email: EmailStr
+    email: Email
     password: str = Field(min_length=8, max_length=128)
     first_name: str = Field(min_length=1, max_length=100)
     last_name: str = Field(min_length=1, max_length=100)
+    phone: Phone | None = None
+    address: Address | None = None
     role: UserRole = UserRole.CLIENT
 
 
 class LoginRequest(RequestSchema):
-    email: EmailStr
+    email: LoginEmail
     password: str
 
 
@@ -32,6 +35,8 @@ class UserResponse(BaseSchema):
     email: EmailStr
     first_name: str
     last_name: str
+    phone: str | None = None
+    address: str | None = None
     role: UserRole
     is_active: bool
 

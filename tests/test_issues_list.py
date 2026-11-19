@@ -99,13 +99,13 @@ def test_list_filter_by_status(
     second = create_issue(client, headers, category_ids[0], "will-be-in-progress")
     create_issue(client, headers, category_ids[0], "stays-open")
     with test_session_factory() as db:
-        db.get(Issue, first["id"]).status = IssueStatus.RESOLVED
+        db.get(Issue, first["id"]).status = IssueStatus.DONE
         db.get(Issue, second["id"]).status = IssueStatus.IN_PROGRESS
         db.commit()
 
-    resolved = client.get("/issues?status=resolved", headers=headers)
+    resolved = client.get("/issues?status=done", headers=headers)
     in_progress = client.get("/issues?status=in_progress", headers=headers)
-    still_open = client.get("/issues?status=open", headers=headers)
+    still_open = client.get("/issues?status=sent", headers=headers)
 
     assert titles(resolved) == ["will-be-resolved"]
     assert titles(in_progress) == ["will-be-in-progress"]
@@ -152,5 +152,96 @@ def test_list_without_token_is_rejected(client: TestClient) -> None:
 )
 def test_list_with_invalid_query_is_rejected(client: TestClient, query: str) -> None:
     response = client.get(f"/issues?{query}", headers=auth_headers(client))
+
+    assert response.status_code == 422
+
+
+def test_list_my_issues_returns_tab_counts(
+    client: TestClient,
+    test_session_factory,
+    category_ids: list[int],
+) -> None:
+    headers = auth_headers(client)
+
+    issues = [
+        create_issue(client, headers, category_ids[0], "active-sent"),
+        create_issue(client, headers, category_ids[0], "active-accepted"),
+        create_issue(client, headers, category_ids[0], "completed"),
+        create_issue(client, headers, category_ids[0], "cancelled"),
+    ]
+
+    statuses = [
+        IssueStatus.SENT,
+        IssueStatus.ACCEPTED,
+        IssueStatus.DONE,
+        IssueStatus.CANCELLED,
+    ]
+
+    with test_session_factory() as db:
+        for issue_data, issue_status in zip(issues, statuses, strict=True):
+            db.get(Issue, issue_data["id"]).status = issue_status
+        db.commit()
+
+    response = client.get("/issues?mine=true&limit=1", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["counts"] == {
+        "all": 4,
+        "active": 2,
+        "done": 1,
+    }
+    assert len(data["items"]) == 1
+
+
+def test_list_my_issues_filters_by_status_group(
+    client: TestClient,
+    test_session_factory,
+    category_ids: list[int],
+) -> None:
+    headers = auth_headers(client)
+
+    issues = [
+        create_issue(client, headers, category_ids[0], "active"),
+        create_issue(client, headers, category_ids[0], "completed"),
+        create_issue(client, headers, category_ids[0], "cancelled"),
+    ]
+
+    with test_session_factory() as db:
+        db.get(Issue, issues[0]["id"]).status = IssueStatus.IN_PROGRESS
+        db.get(Issue, issues[1]["id"]).status = IssueStatus.DONE
+        db.get(Issue, issues[2]["id"]).status = IssueStatus.CANCELLED
+        db.commit()
+
+    active = client.get("/issues?mine=true&status_group=active", headers=headers)
+    done = client.get("/issues?mine=true&status_group=done", headers=headers)
+
+    assert [item["title"] for item in active.json()["items"]] == ["active"]
+    assert [item["title"] for item in done.json()["items"]] == ["completed"]
+
+    assert active.json()["counts"] == done.json()["counts"]
+    assert active.json()["counts"] == {
+        "all": 3,
+        "active": 1,
+        "done": 1,
+    }
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "mine=true&status=done",
+        "status_group=active",
+        "mine=true&status_group=unknown",
+    ],
+)
+def test_list_my_issues_rejects_invalid_filter_combinations(
+    client: TestClient,
+    query: str,
+) -> None:
+    headers = auth_headers(client)
+
+    response = client.get(f"/issues?{query}", headers=headers)
 
     assert response.status_code == 422
