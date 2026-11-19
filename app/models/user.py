@@ -27,7 +27,7 @@ class User(Base):
     last_name: Mapped[str] = mapped_column(String(100))
     phone: Mapped[str | None] = mapped_column(String(32), unique=True)
     address: Mapped[str | None] = mapped_column(String(255))
-    city: Mapped[str | None] = mapped_column(String(100))
+    city: Mapped[str | None] = mapped_column(String(100), index=True)
     avatar_url: Mapped[str | None] = mapped_column(String(500))
     public_id: Mapped[int] = mapped_column(
         Integer, Sequence("users_public_id_seq", start=1000), unique=True

@@ -8,6 +8,7 @@ from app.routers import (
     health,
     issues,
     masters,
+    search,
     service_centers,
     users,
 )
@@ -26,6 +27,7 @@ app.include_router(auth.router)
 app.include_router(categories.router)
 app.include_router(issues.router)
 app.include_router(masters.router)
+app.include_router(search.router)
 app.include_router(service_centers.router)
 app.include_router(users.router)
 

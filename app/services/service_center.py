@@ -97,6 +97,7 @@ def build_service_center_read(
         public_id=company.public_id,
         name=company.name,
         address=company.address,
+        city=company.city,
         phone=company.phone,
         location=location,
         rating=company.rating,
