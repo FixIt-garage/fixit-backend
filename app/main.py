@@ -12,6 +12,7 @@ from app.routers import (
     search,
     service_centers,
     users,
+    volunteer_requests,
 )
 
 app = FastAPI(title=settings.app_name)
@@ -32,6 +33,7 @@ app.include_router(masters.router)
 app.include_router(search.router)
 app.include_router(service_centers.router)
 app.include_router(users.router)
+app.include_router(volunteer_requests.router)
 
 
 @app.get("/")
