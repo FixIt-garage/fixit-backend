@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.user import User
@@ -48,6 +48,7 @@ def _request_data(request: VolunteerRequest, joined: int, is_joined: bool) -> di
         "category_id": request.category_id,
         "address": request.address,
         "city": request.city,
+        "district": request.district,
         "event_date": request.event_date,
         "status": request.status,
         "joined": joined,
@@ -62,8 +63,11 @@ def _request_data(request: VolunteerRequest, joined: int, is_joined: bool) -> di
 
 
 def list_requests(db: Session, user: User, city: str | None, limit: int, offset: int) -> dict:
-    """Open volunteer requests, the nearest events first, undated ones last."""
-    conditions = [VolunteerRequest.status == VolunteerRequestStatus.open]
+    """Open requests that have not happened yet, the nearest first, undated ones last."""
+    conditions = [
+        VolunteerRequest.status == VolunteerRequestStatus.open,
+        or_(VolunteerRequest.event_date.is_(None), VolunteerRequest.event_date >= func.now()),
+    ]
     city = city.strip() if city else None
     if city:
         conditions.append(func.lower(VolunteerRequest.city) == city.lower())

@@ -24,6 +24,7 @@ class VolunteerRequestRead(BaseModel):
     category_id: int | None
     address: str | None
     city: str | None
+    district: str | None
     event_date: datetime | None
     status: VolunteerRequestStatus
     joined: int

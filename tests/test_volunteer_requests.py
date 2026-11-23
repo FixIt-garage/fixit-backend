@@ -14,7 +14,6 @@ from app.models.volunteer import (
 )
 
 PASSWORD = "TestPassword123!"
-FIRST_EVENT = datetime(2026, 12, 1, 10, tzinfo=UTC)
 
 
 def register(client: TestClient, email: str, role: str = "master") -> dict[str, str]:
@@ -81,7 +80,7 @@ def make_request(
         title=title,
         description="Потрібні волонтери",
         city=city,
-        event_date=FIRST_EVENT + timedelta(days=days) if days is not None else None,
+        event_date=datetime.now(UTC) + timedelta(days=days) if days is not None else None,
         volunteers_needed=needed,
         status=status,
     )
@@ -284,3 +283,40 @@ def test_closed_request_can_be_opened_and_unknown_one_is_not_found(
     assert closed.status_code == 200
     assert closed.json()["status"] == "closed"
     assert unknown.status_code == 404
+
+
+def test_list_hides_past_events_but_keeps_upcoming_and_undated(
+    client: TestClient, test_session_factory, volunteer: dict[str, str]
+) -> None:
+    past_id, _, _ = seed_requests(
+        test_session_factory,
+        {"title": "Past", "days": -2},
+        {"title": "Soon", "days": 1},
+        {"title": "Undated", "days": None},
+    )
+
+    body = client.get("/volunteer-requests", headers=volunteer).json()
+    first_page = client.get("/volunteer-requests", params={"limit": 1}, headers=volunteer).json()
+    past_details = client.get(f"/volunteer-requests/{past_id}", headers=volunteer)
+
+    assert [item["title"] for item in body["items"]] == ["Soon", "Undated"]
+    assert body["total"] == 2
+    assert [item["title"] for item in first_page["items"]] == ["Soon"]
+    assert past_details.status_code == 200
+
+
+def test_district_is_returned_in_the_list_and_in_the_details(
+    client: TestClient, test_session_factory, volunteer: dict[str, str]
+) -> None:
+    with test_session_factory() as db:
+        organization = make_organization(db)
+        request = make_request(db, organization, title="Help")
+        request.district = "Сихів"
+        db.commit()
+        request_id = request.id
+
+    listed = client.get("/volunteer-requests", headers=volunteer).json()["items"][0]
+    detail = client.get(f"/volunteer-requests/{request_id}", headers=volunteer).json()
+
+    assert listed["district"] == "Сихів"
+    assert detail["district"] == "Сихів"
