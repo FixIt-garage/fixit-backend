@@ -62,8 +62,12 @@ def test_not_found_has_common_format() -> None:
     response = client.get("/nope")
 
     assert response.status_code == 404
-    assert response.json() == {"code": "not_found", "message": "Not Found", "details": []}
-
+    assert response.json() == {
+        "code": "not_found",
+        "message": "Not Found",
+        "details": [],
+        "detail": "Not Found",
+    }
 
 def test_unhandled_error_hides_internal_details() -> None:
     response = client.get("/boom")
@@ -93,3 +97,18 @@ def test_openapi_documents_error_schema() -> None:
 
     assert "ErrorResponse" in schema["components"]["schemas"]
     assert "422" in schema["paths"]["/issues"]["get"]["responses"]
+
+def test_validation_error_keeps_legacy_detail_without_input() -> None:
+    response = client.post("/items", json={"name": 123, "password": "secret"})
+
+    assert response.status_code == 422
+    legacy = response.json()["detail"]
+    assert legacy[0]["loc"] == ["body", "name"]
+    assert {"loc", "msg", "type"} == set(legacy[0])
+    assert "secret" not in response.text
+
+
+def test_unhandled_error_has_no_legacy_detail() -> None:
+    response = client.get("/boom")
+
+    assert "detail" not in response.json()
