@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import require_role
@@ -42,3 +42,33 @@ def get_volunteer_request(
         return volunteer_service.get_request(db, current_user, request_id)
     except volunteer_service.VolunteerRequestNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Volunteer request not found") from exc
+
+
+@router.post("/{request_id}/join", response_model=VolunteerRequestDetailRead)
+def join_volunteer_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(volunteer_master),
+) -> dict:
+    """Join an open request: 409 if it is full, closed, over or already joined."""
+    try:
+        return volunteer_service.join_request(db, current_user, request_id)
+    except volunteer_service.VolunteerRequestNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Volunteer request not found") from exc
+    except volunteer_service.JoinNotAllowedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.delete("/{request_id}/join", status_code=status.HTTP_204_NO_CONTENT)
+def leave_volunteer_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(volunteer_master),
+) -> None:
+    """Leave a request the user has joined."""
+    try:
+        volunteer_service.leave_request(db, current_user, request_id)
+    except volunteer_service.VolunteerRequestNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Volunteer request not found") from exc
+    except volunteer_service.NotJoinedError as exc:
+        raise HTTPException(status_code=404, detail="You have not joined this request") from exc
