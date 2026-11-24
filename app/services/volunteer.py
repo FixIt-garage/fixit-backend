@@ -3,8 +3,10 @@ from datetime import UTC, datetime
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.models.catalog import Category
 from app.models.user import User
 from app.models.volunteer import (
+    VolunteerOrganization,
     VolunteerParticipation,
     VolunteerRequest,
     VolunteerRequestStatus,
@@ -23,6 +25,18 @@ class JoinNotAllowedError(Exception):
 
 class NotJoinedError(Exception):
     """The user has not joined the request."""
+
+
+class CategoryNotFoundError(Exception):
+    """The category does not exist."""
+
+
+class NotYourRequestError(Exception):
+    """The request belongs to another organization."""
+
+
+class UpdateNotAllowedError(Exception):
+    """The change conflicts with the current state; the message tells why."""
 
 
 def _joined_counts(db: Session, request_ids: list[int]) -> dict[int, int]:
@@ -170,3 +184,44 @@ def leave_request(db: Session, user: User, request_id: int) -> None:
         raise NotJoinedError(request_id)
     db.delete(participation)
     db.commit()
+
+
+def get_organization(db: Session, user: User) -> VolunteerOrganization | None:
+    return db.scalar(
+        select(VolunteerOrganization).where(VolunteerOrganization.owner_user_id == user.id)
+    )
+
+
+def _check_category(db: Session, category_id: int) -> None:
+    if db.get(Category, category_id) is None:
+        raise CategoryNotFoundError(category_id)
+
+
+def create_request(db: Session, user: User, organization: VolunteerOrganization, data) -> dict:
+    """Publish an open request for the organization."""
+    _check_category(db, data.category_id)
+    request = VolunteerRequest(organization_id=organization.id, **data.model_dump())
+    db.add(request)
+    db.commit()
+    return get_request(db, user, request.id)
+
+
+def update_request(
+    db: Session, user: User, organization: VolunteerOrganization, request_id: int, data
+) -> dict:
+    """Change only the sent fields of the organization's own request."""
+    request = _lock_request(db, request_id)
+    if request.organization_id != organization.id:
+        raise NotYourRequestError(request_id)
+
+    changes = data.model_dump(exclude_unset=True)
+    if changes.get("category_id") is not None:
+        _check_category(db, changes["category_id"])
+    needed = changes.get("volunteers_needed")
+    if needed is not None and needed < _joined_counts(db, [request.id]).get(request.id, 0):
+        raise UpdateNotAllowedError("Fewer places than volunteers who have already joined")
+
+    for field, value in changes.items():
+        setattr(request, field, value)
+    db.commit()
+    return get_request(db, user, request_id)
