@@ -128,19 +128,89 @@ def test_unknown_request_is_not_found(client, volunteer) -> None:
     assert client.delete("/volunteer-requests/999999/join", headers=volunteer).status_code == 404
 
 
-def test_only_volunteer_masters_can_join_or_leave(client, test_session_factory) -> None:
+def test_only_volunteer_masters_can_join_but_any_master_can_leave(
+    client, test_session_factory
+) -> None:
     [request_id] = seed_requests(test_session_factory, {"title": "Help"})
     plain = make_volunteer(client, test_session_factory, "plain@example.com", False)
     client_user = register(client, "client@example.com", role="client")
+    join_url = f"/volunteer-requests/{request_id}/join"
 
     for headers in (plain, client_user):
-        assert (
-            client.post(f"/volunteer-requests/{request_id}/join", headers=headers).status_code
-            == 403
-        )
-        assert (
-            client.delete(f"/volunteer-requests/{request_id}/join", headers=headers).status_code
-            == 403
-        )
-    assert client.post(f"/volunteer-requests/{request_id}/join").status_code == 401
+        assert client.post(join_url, headers=headers).status_code == 403
+    assert client.delete(join_url, headers=client_user).status_code == 403
+    # A master without the volunteer mode may leave, but he has not joined anything here.
+    assert client.delete(join_url, headers=plain).status_code == 404
+    assert client.post(join_url).status_code == 401
+    assert client.delete(join_url).status_code == 401
     assert joined_ids(test_session_factory, request_id) == []
+
+
+def test_master_can_leave_after_turning_volunteer_mode_off(
+    client, test_session_factory, volunteer
+) -> None:
+    [request_id] = seed_requests(test_session_factory, {"title": "Help", "needed": 1})
+    client.post(f"/volunteer-requests/{request_id}/join", headers=volunteer)
+    turned_off = client.patch(
+        "/masters/me/volunteer", json={"is_volunteer": False}, headers=volunteer
+    )
+
+    leave = client.delete(f"/volunteer-requests/{request_id}/join", headers=volunteer)
+
+    assert turned_off.status_code == 200
+    assert leave.status_code == 204
+    assert joined_ids(test_session_factory, request_id) == []
+
+
+def test_after_turning_volunteer_mode_off_the_requests_stay_closed(
+    client, test_session_factory, volunteer
+) -> None:
+    [request_id] = seed_requests(test_session_factory, {"title": "Help"})
+    client.patch("/masters/me/volunteer", json={"is_volunteer": False}, headers=volunteer)
+
+    assert client.get("/volunteer-requests", headers=volunteer).status_code == 403
+    assert (
+        client.post(f"/volunteer-requests/{request_id}/join", headers=volunteer).status_code == 403
+    )
+
+
+def test_two_masters_racing_for_the_last_place(client, test_session_factory, monkeypatch) -> None:
+    import threading
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from app.services import volunteer as volunteer_service
+
+    first = make_volunteer(client, test_session_factory, "first@example.com")
+    second = make_volunteer(client, test_session_factory, "second@example.com")
+    [request_id] = seed_requests(test_session_factory, {"title": "Help", "needed": 1})
+
+    original = volunteer_service._joined_counts
+
+    def slow_counts(db, request_ids):
+        counted = original(db, request_ids)
+        time.sleep(1.0)  # a window between counting the places and taking one
+        return counted
+
+    monkeypatch.setattr(volunteer_service, "_joined_counts", slow_counts)
+    results: dict[str, int] = {}
+
+    def join(name: str, headers: dict[str, str], delay: float) -> None:
+        time.sleep(delay)
+        with TestClient(app) as thread_client:
+            response = thread_client.post(f"/volunteer-requests/{request_id}/join", headers=headers)
+        results[name] = response.status_code
+
+    threads = [
+        threading.Thread(target=join, args=("first", first, 0.0)),
+        threading.Thread(target=join, args=("second", second, 0.3)),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=30)
+
+    assert sorted(results.values()) == [200, 409]
+    assert len(joined_ids(test_session_factory, request_id)) == 1

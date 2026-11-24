@@ -63,9 +63,9 @@ def join_volunteer_request(
 def leave_volunteer_request(
     request_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(volunteer_master),
+    current_user: User = Depends(master_required),
 ) -> None:
-    """Leave a request the user has joined."""
+    """Leave a request the user has joined; it works even after "Я волонтер" is turned off."""
     try:
         volunteer_service.leave_request(db, current_user, request_id)
     except volunteer_service.VolunteerRequestNotFoundError as exc:
