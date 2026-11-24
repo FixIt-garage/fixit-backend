@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -13,6 +15,14 @@ PARTICIPANTS_SHOWN = 10
 
 class VolunteerRequestNotFoundError(Exception):
     """The volunteer request does not exist."""
+
+
+class JoinNotAllowedError(Exception):
+    """The user cannot join the request; the message tells why."""
+
+
+class NotJoinedError(Exception):
+    """The user has not joined the request."""
 
 
 def _joined_counts(db: Session, request_ids: list[int]) -> dict[int, int]:
@@ -121,3 +131,42 @@ def get_request(db: Session, user: User, request_id: int) -> dict:
         for person in participants
     ]
     return data
+
+
+def _lock_request(db: Session, request_id: int) -> VolunteerRequest:
+    """Load the request and lock its row, so joins of one request go one after another."""
+    request = db.scalar(
+        select(VolunteerRequest).where(VolunteerRequest.id == request_id).with_for_update()
+    )
+    if request is None:
+        raise VolunteerRequestNotFoundError(request_id)
+    return request
+
+
+def join_request(db: Session, user: User, request_id: int) -> dict:
+    """Join an open request that has not happened yet and still has free places."""
+    request = _lock_request(db, request_id)
+
+    if request.status != VolunteerRequestStatus.open:
+        raise JoinNotAllowedError("The request is closed")
+    if request.event_date is not None and request.event_date < datetime.now(UTC):
+        raise JoinNotAllowedError("The event has already happened")
+    if _joined_by(db, [request.id], user):
+        raise JoinNotAllowedError("You have already joined this request")
+    joined = _joined_counts(db, [request.id]).get(request.id, 0)
+    if request.volunteers_needed is not None and joined >= request.volunteers_needed:
+        raise JoinNotAllowedError("The request is full")
+
+    db.add(VolunteerParticipation(request_id=request.id, user_id=user.id))
+    db.commit()
+    return get_request(db, user, request_id)
+
+
+def leave_request(db: Session, user: User, request_id: int) -> None:
+    """Take the user off the request."""
+    request = _lock_request(db, request_id)
+    participation = db.get(VolunteerParticipation, (request.id, user.id))
+    if participation is None:
+        raise NotJoinedError(request_id)
+    db.delete(participation)
+    db.commit()
