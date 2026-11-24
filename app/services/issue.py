@@ -10,6 +10,7 @@ from app.models.issue_status_event import IssueStatusEvent
 from app.models.master import Master
 from app.models.user import User
 from app.schemas.issue import IssueCreate, IssueUpdate
+from app.services import chat as chat_service
 
 
 class CategoryNotFoundError(Exception):
@@ -319,6 +320,10 @@ def transition_issue(
         issue.assignee_company_id = None
 
     issue.status = target_status
+
+    if target_status == IssueStatus.ACCEPTED:
+        # The client and the accepting master can talk from now on.
+        chat_service.open_conversation(db, issue, master_user_id=actor.id)
 
     db.add(
         IssueStatusEvent(

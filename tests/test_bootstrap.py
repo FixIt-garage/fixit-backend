@@ -116,7 +116,7 @@ def test_fills_empty_key(repo: Path, runner: list[str], assignment: str) -> None
 
 @pytest.mark.parametrize("runner", RUNNERS)
 def test_appends_missing_key(repo: Path, runner: list[str]) -> None:
-    (repo / ".env").write_text("APP_NAME=FixIt API\n")
+    (repo / ".env").write_bytes(b"APP_NAME=FixIt API\n")
 
     run(repo, runner)
 
