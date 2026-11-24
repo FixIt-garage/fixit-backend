@@ -59,6 +59,7 @@ class ServiceCenterRead(BaseModel):
     public_id: int
     name: str
     address: str | None
+    city: str | None
     phone: str | None
 
     location: ServiceCenterLocation | None
@@ -84,6 +85,7 @@ class ServiceCenterUpdate(BaseModel):
 
     name: str | None = Field(None, min_length=1, max_length=255)
     address: Address | None = None
+    city: str | None = Field(None, min_length=1, max_length=100)
     phone: Phone | None = None
 
     latitude: Decimal | None = Field(None, ge=-90, le=90)

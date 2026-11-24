@@ -6,11 +6,14 @@ from app.exception_handlers import register_exception_handlers
 from app.routers import (
     auth,
     categories,
+    chats,
     health,
     issues,
     masters,
+    search,
     service_centers,
     users,
+    volunteer_requests,
 )
 from app.schemas.errors import ERROR_RESPONSES
 from app.schemas.health import RootResponse
@@ -28,10 +31,13 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(categories.router)
+app.include_router(chats.router)
 app.include_router(issues.router)
 app.include_router(masters.router)
+app.include_router(search.router)
 app.include_router(service_centers.router)
 app.include_router(users.router)
+app.include_router(volunteer_requests.router)
 
 
 @app.get("/", response_model=RootResponse)

@@ -49,6 +49,7 @@ class VolunteerRequest(Base):
     )
     address: Mapped[str | None] = mapped_column(String(255))
     city: Mapped[str | None] = mapped_column(String(100), index=True)
+    district: Mapped[str | None] = mapped_column(String(100))
     event_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     volunteers_needed: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[VolunteerRequestStatus] = mapped_column(
