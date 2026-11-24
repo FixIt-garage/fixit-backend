@@ -221,6 +221,17 @@ def update_request(
     if needed is not None and needed < _joined_counts(db, [request.id]).get(request.id, 0):
         raise UpdateNotAllowedError("Fewer places than volunteers who have already joined")
 
+    reopening = (
+        changes.get("status") == VolunteerRequestStatus.open
+        and request.status == VolunteerRequestStatus.closed
+    )
+    if reopening:
+        final_date = changes["event_date"] if "event_date" in changes else request.event_date
+        if final_date is not None and final_date < datetime.now(UTC):
+            raise UpdateNotAllowedError(
+                "The event has already happened; send a new future event_date to open the request"
+            )
+
     for field, value in changes.items():
         setattr(request, field, value)
     db.commit()

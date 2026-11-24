@@ -8,6 +8,7 @@ from app.models.user import User
 from app.models.volunteer import (
     VolunteerOrganization,
     VolunteerRequest,
+    VolunteerRequestStatus,
 )
 from tests.test_volunteer_requests import (
     add_participant,
@@ -277,3 +278,88 @@ def test_only_organizations_with_a_record_can_create_or_change(
         )
     assert client.post("/volunteer-requests", json=data).status_code == 401
     assert client.patch(f"/volunteer-requests/{request_id}", json={"title": "x"}).status_code == 401
+
+
+def make_closed_past_request(factory, organization_email: str = "org1@example.com") -> int:
+    """A closed request of the organization whose event has already happened."""
+    with factory() as db:
+        owner = db.scalar(select(User).where(User.email == organization_email))
+        record = db.scalar(
+            select(VolunteerOrganization).where(VolunteerOrganization.owner_user_id == owner.id)
+        )
+        request = VolunteerRequest(
+            organization_id=record.id,
+            title="Минула подія",
+            description="Вже відбулась",
+            city="Львів",
+            event_date=datetime.now(UTC) - timedelta(days=3),
+            volunteers_needed=3,
+            status=VolunteerRequestStatus.closed,
+        )
+        db.add(request)
+        db.commit()
+        return request.id
+
+
+def test_a_closed_request_of_a_past_event_cannot_be_opened_as_it_is(
+    client, test_session_factory, organization
+) -> None:
+    request_id = make_closed_past_request(test_session_factory)
+
+    response = client.patch(
+        f"/volunteer-requests/{request_id}", json={"status": "open"}, headers=organization
+    )
+
+    assert response.status_code == 409
+    assert "new future event_date" in response.json()["detail"]
+    assert request_row(test_session_factory, request_id).status == VolunteerRequestStatus.closed
+
+
+def test_a_closed_request_of_a_past_event_can_be_opened_with_a_new_date(
+    client, test_session_factory, organization
+) -> None:
+    volunteer = make_volunteer(client, test_session_factory)
+    request_id = make_closed_past_request(test_session_factory)
+    new_date = (datetime.now(UTC) + timedelta(days=7)).isoformat()
+
+    response = client.patch(
+        f"/volunteer-requests/{request_id}",
+        json={"status": "open", "event_date": new_date},
+        headers=organization,
+    )
+    listed = client.get("/volunteer-requests", headers=volunteer).json()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "open"
+    assert [item["id"] for item in listed["items"]] == [request_id]
+
+
+def test_a_closed_request_without_a_date_can_be_opened(
+    client, test_session_factory, organization
+) -> None:
+    request_id = make_closed_past_request(test_session_factory)
+    with test_session_factory() as db:
+        db.get(VolunteerRequest, request_id).event_date = None
+        db.commit()
+
+    response = client.patch(
+        f"/volunteer-requests/{request_id}", json={"status": "open"}, headers=organization
+    )
+
+    assert response.status_code == 200
+
+
+def test_a_past_request_that_is_still_open_can_be_edited(
+    client, test_session_factory, organization
+) -> None:
+    request_id = make_closed_past_request(test_session_factory)
+    with test_session_factory() as db:
+        db.get(VolunteerRequest, request_id).status = VolunteerRequestStatus.open
+        db.commit()
+
+    response = client.patch(
+        f"/volunteer-requests/{request_id}", json={"title": "Виправлений"}, headers=organization
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Виправлений"
