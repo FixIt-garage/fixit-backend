@@ -1,13 +1,19 @@
-from pydantic import EmailStr, Field
+from typing import Annotated
+
+from pydantic import EmailStr, Field, StringConstraints
 
 from app.models.user import UserRole
 from app.schemas.base import BaseSchema, RequestSchema
 from app.schemas.validators import Address, Email, LoginEmail, Phone
 
+# Passwords are secrets: keep them exactly as typed. The base schema strips whitespace from
+# strings, which would change "  secret  " into "secret" and break login for existing users.
+Password = Annotated[str, StringConstraints(strip_whitespace=False)]
+
 
 class RegisterRequest(RequestSchema):
     email: Email
-    password: str = Field(min_length=8, max_length=128)
+    password: Password = Field(min_length=8, max_length=128)
     first_name: str = Field(min_length=1, max_length=100)
     last_name: str = Field(min_length=1, max_length=100)
     phone: Phone | None = None
@@ -17,7 +23,7 @@ class RegisterRequest(RequestSchema):
 
 class LoginRequest(RequestSchema):
     email: LoginEmail
-    password: str
+    password: Password
 
 
 class RefreshRequest(RequestSchema):
