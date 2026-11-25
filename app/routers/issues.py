@@ -14,6 +14,7 @@ from app.schemas.issue import (
     IssueRead,
     IssueUpdate,
 )
+from app.schemas.pagination import Page, PageParams
 from app.schemas.review import ReviewCreate, ReviewRead
 from app.services import issue as issue_service
 from app.services import review as review_service
@@ -79,18 +80,20 @@ def create_issue(
         raise HTTPException(status_code=422, detail="Service center not found") from exc
 
 
-@router.get("", response_model=list[IssueRead] | IssueListRead)
+@router.get("", response_model=IssueListRead | Page[IssueRead])
 def list_issues(
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    params: Annotated[PageParams, Depends()],
     status_filter: Annotated[IssueStatus | None, Query(alias="status")] = None,
     category_id: Annotated[int | None, Query(ge=1)] = None,
     mine: bool = False,
     status_group: Annotated[str | None, Query(pattern="^(active|done)$")] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
-    """List issues, optionally returning the owner's tab counts."""
+) -> IssueListRead | Page[IssueRead]:
+    """List the current user's issues, newest first.
+
+    With ``mine=true`` the response also has the counts for the status tabs.
+    """
     if mine:
         if status_filter is not None:
             raise HTTPException(
@@ -101,15 +104,18 @@ def list_issues(
         issues, counts = issue_service.list_my_issues(
             db,
             current_user,
-            limit=limit,
-            offset=offset,
+            limit=params.limit,
+            offset=params.offset,
             status_group=status_group,
             category_id=category_id,
         )
-        return {
-            "items": issues,
-            "counts": counts,
-        }
+        return IssueListRead(
+            items=[IssueRead.model_validate(issue) for issue in issues],
+            total=counts[status_group or "all"],
+            limit=params.limit,
+            offset=params.offset,
+            counts=counts,
+        )
 
     if status_group is not None:
         raise HTTPException(
@@ -117,13 +123,19 @@ def list_issues(
             detail="status_group requires mine=true",
         )
 
-    return issue_service.list_issues(
+    items, total = issue_service.list_issues(
         db,
         current_user,
-        limit=limit,
-        offset=offset,
+        limit=params.limit,
+        offset=params.offset,
         status=status_filter,
         category_id=category_id,
+    )
+    return Page[IssueRead](
+        items=[IssueRead.model_validate(item) for item in items],
+        total=total,
+        limit=params.limit,
+        offset=params.offset,
     )
 
 
@@ -229,7 +241,6 @@ def delete_issue(
     """Soft delete an issue. Only its owner can do this."""
     issue = get_owned_issue(db, issue_id, current_user)
     issue_service.delete_issue(db, issue)
-
 
 
 @router.post(

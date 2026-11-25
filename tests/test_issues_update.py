@@ -79,8 +79,8 @@ def test_patch_cannot_change_status_but_can_update_other_fields(
 
     assert response.status_code == 422
 
-    detail = response.json()["detail"]
-    assert any(error["loc"][-1] == "status" for error in detail)
+    fields = [detail["field"] for detail in response.json()["details"]]
+    assert "body.status" in fields
 
 
 def test_patch_is_saved_in_database(
@@ -158,7 +158,7 @@ def test_patch_with_unknown_category_is_rejected(
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "Category not found"
+    assert response.json()["message"] == "Category not found"
 
 
 @pytest.mark.parametrize(

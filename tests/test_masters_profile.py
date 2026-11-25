@@ -145,7 +145,7 @@ def test_unknown_category_is_rejected_and_nothing_is_saved(
     )
 
     assert response.status_code == 422
-    assert response.json()["detail"] == "Category not found"
+    assert response.json()["message"] == "Category not found"
     with test_session_factory() as db:
         assert db.scalar(select(Master).where(Master.district == "Sykhiv")) is None
 

@@ -1,12 +1,19 @@
-from pydantic import BaseModel, EmailStr, Field
+from typing import Annotated
+
+from pydantic import EmailStr, Field, StringConstraints
 
 from app.models.user import UserRole
+from app.schemas.base import BaseSchema, RequestSchema
 from app.schemas.validators import Address, Email, LoginEmail, Phone
 
+# Passwords are secrets: keep them exactly as typed. The base schema strips whitespace from
+# strings, which would change "  secret  " into "secret" and break login for existing users.
+Password = Annotated[str, StringConstraints(strip_whitespace=False)]
 
-class RegisterRequest(BaseModel):
+
+class RegisterRequest(RequestSchema):
     email: Email
-    password: str = Field(min_length=8, max_length=128)
+    password: Password = Field(min_length=8, max_length=128)
     first_name: str = Field(min_length=1, max_length=100)
     last_name: str = Field(min_length=1, max_length=100)
     phone: Phone | None = None
@@ -14,21 +21,22 @@ class RegisterRequest(BaseModel):
     role: UserRole = UserRole.CLIENT
 
 
-class LoginRequest(BaseModel):
+class LoginRequest(RequestSchema):
     email: LoginEmail
-    password: str
+    password: Password
 
 
-class RefreshRequest(BaseModel):
+class RefreshRequest(RequestSchema):
     refresh_token: str
 
 
-class TokenResponse(BaseModel):
+class TokenResponse(BaseSchema):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
 
-class UserResponse(BaseModel):
+
+class UserResponse(BaseSchema):
     id: int
     email: EmailStr
     first_name: str
@@ -38,7 +46,6 @@ class UserResponse(BaseModel):
     role: UserRole
     is_active: bool
 
-    model_config = {"from_attributes": True}
 
-class MessageResponse(BaseModel):
+class MessageResponse(BaseSchema):
     message: str

@@ -2,17 +2,17 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
 from app.models.issue import IssueStatus
+from app.schemas.base import BaseSchema, RequestSchema
+from app.schemas.pagination import Page
 
 DESCRIPTION_MAX_LENGTH = 500
 
 
-class IssueCreate(BaseModel):
+class IssueCreate(RequestSchema):
     # Whitespace is stripped before the length checks, so "   " is rejected.
-    model_config = ConfigDict(str_strip_whitespace=True)
-
     title: str = Field(..., min_length=1, max_length=255, description="Назва проблеми")
     description: str = Field(
         ...,
@@ -34,9 +34,7 @@ class IssueCreate(BaseModel):
         return self
 
 
-class IssueUpdate(BaseModel):
-    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-
+class IssueUpdate(RequestSchema):
     title: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, min_length=1, max_length=DESCRIPTION_MAX_LENGTH)
     category_id: int | None = Field(None, ge=1)
@@ -53,9 +51,7 @@ class IssueUpdate(BaseModel):
         return self
 
 
-class IssueRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class IssueRead(BaseSchema):
     id: int
     title: str
     description: str
@@ -70,16 +66,14 @@ class IssueRead(BaseModel):
     updated_at: datetime
 
 
-class IssueStatusEventRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class IssueStatusEventRead(BaseSchema):
     id: int
     status: IssueStatus
     created_at: datetime
     actor_id: int
 
 
-class AssignedMasterRead(BaseModel):
+class AssignedMasterRead(BaseSchema):
     name: str
     rating: Decimal | None
 
@@ -89,18 +83,19 @@ class IssueDetailRead(IssueRead):
     assigned_master: AssignedMasterRead | None
 
 
-class IssueCountsRead(BaseModel):
+class IssueCountsRead(BaseSchema):
     all: int
     active: int
     done: int
 
 
-class IssueListRead(BaseModel):
-    items: list[IssueRead]
+class IssueListRead(Page[IssueRead]):
+    """A page of the owner's issues plus the counts for the status tabs."""
+
     counts: IssueCountsRead
 
 
-class MasterRequestRead(BaseModel):
+class MasterRequestRead(BaseSchema):
     id: int
     title: str
     status: IssueStatus

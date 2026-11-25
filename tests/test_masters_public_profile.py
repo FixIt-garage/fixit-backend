@@ -127,7 +127,7 @@ def test_unknown_master_returns_404(client: TestClient) -> None:
     response = client.get("/masters/999999", headers=viewer)
 
     assert response.status_code == 404
-    assert response.json()["detail"] == "Master not found"
+    assert response.json()["message"] == "Master not found"
 
 
 def test_deactivated_master_returns_404(client: TestClient, test_session_factory) -> None:
