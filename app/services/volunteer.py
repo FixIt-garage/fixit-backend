@@ -1,8 +1,12 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.models.catalog import Category
 from app.models.user import User
 from app.models.volunteer import (
+    VolunteerOrganization,
     VolunteerParticipation,
     VolunteerRequest,
     VolunteerRequestStatus,
@@ -13,6 +17,26 @@ PARTICIPANTS_SHOWN = 10
 
 class VolunteerRequestNotFoundError(Exception):
     """The volunteer request does not exist."""
+
+
+class JoinNotAllowedError(Exception):
+    """The user cannot join the request; the message tells why."""
+
+
+class NotJoinedError(Exception):
+    """The user has not joined the request."""
+
+
+class CategoryNotFoundError(Exception):
+    """The category does not exist."""
+
+
+class NotYourRequestError(Exception):
+    """The request belongs to another organization."""
+
+
+class UpdateNotAllowedError(Exception):
+    """The change conflicts with the current state; the message tells why."""
 
 
 def _joined_counts(db: Session, request_ids: list[int]) -> dict[int, int]:
@@ -121,3 +145,94 @@ def get_request(db: Session, user: User, request_id: int) -> dict:
         for person in participants
     ]
     return data
+
+
+def _lock_request(db: Session, request_id: int) -> VolunteerRequest:
+    """Load the request and lock its row, so joins of one request go one after another."""
+    request = db.scalar(
+        select(VolunteerRequest).where(VolunteerRequest.id == request_id).with_for_update()
+    )
+    if request is None:
+        raise VolunteerRequestNotFoundError(request_id)
+    return request
+
+
+def join_request(db: Session, user: User, request_id: int) -> dict:
+    """Join an open request that has not happened yet and still has free places."""
+    request = _lock_request(db, request_id)
+
+    if request.status != VolunteerRequestStatus.open:
+        raise JoinNotAllowedError("The request is closed")
+    if request.event_date is not None and request.event_date < datetime.now(UTC):
+        raise JoinNotAllowedError("The event has already happened")
+    if _joined_by(db, [request.id], user):
+        raise JoinNotAllowedError("You have already joined this request")
+    joined = _joined_counts(db, [request.id]).get(request.id, 0)
+    if request.volunteers_needed is not None and joined >= request.volunteers_needed:
+        raise JoinNotAllowedError("The request is full")
+
+    db.add(VolunteerParticipation(request_id=request.id, user_id=user.id))
+    db.commit()
+    return get_request(db, user, request_id)
+
+
+def leave_request(db: Session, user: User, request_id: int) -> None:
+    """Take the user off the request."""
+    request = _lock_request(db, request_id)
+    participation = db.get(VolunteerParticipation, (request.id, user.id))
+    if participation is None:
+        raise NotJoinedError(request_id)
+    db.delete(participation)
+    db.commit()
+
+
+def get_organization(db: Session, user: User) -> VolunteerOrganization | None:
+    return db.scalar(
+        select(VolunteerOrganization).where(VolunteerOrganization.owner_user_id == user.id)
+    )
+
+
+def _check_category(db: Session, category_id: int) -> None:
+    if db.get(Category, category_id) is None:
+        raise CategoryNotFoundError(category_id)
+
+
+def create_request(db: Session, user: User, organization: VolunteerOrganization, data) -> dict:
+    """Publish an open request for the organization."""
+    _check_category(db, data.category_id)
+    request = VolunteerRequest(organization_id=organization.id, **data.model_dump())
+    db.add(request)
+    db.commit()
+    return get_request(db, user, request.id)
+
+
+def update_request(
+    db: Session, user: User, organization: VolunteerOrganization, request_id: int, data
+) -> dict:
+    """Change only the sent fields of the organization's own request."""
+    request = _lock_request(db, request_id)
+    if request.organization_id != organization.id:
+        raise NotYourRequestError(request_id)
+
+    changes = data.model_dump(exclude_unset=True)
+    if changes.get("category_id") is not None:
+        _check_category(db, changes["category_id"])
+    needed = changes.get("volunteers_needed")
+    if needed is not None and needed < _joined_counts(db, [request.id]).get(request.id, 0):
+        raise UpdateNotAllowedError("Fewer places than volunteers who have already joined")
+
+    reopening = (
+        changes.get("status") == VolunteerRequestStatus.open
+        and request.status == VolunteerRequestStatus.closed
+    )
+    if reopening:
+        final_date = changes["event_date"] if "event_date" in changes else request.event_date
+        if final_date is not None and final_date < datetime.now(UTC):
+            raise UpdateNotAllowedError(
+                "The event has already happened; send a new future event_date to open the request"
+            )
+
+    for field, value in changes.items():
+        setattr(request, field, value)
+    db.commit()
+    return get_request(db, user, request_id)
