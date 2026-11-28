@@ -79,7 +79,7 @@ Use a different key for each environment. Never commit `.env` or share your secr
 
 ### 3. Start Postgres
 
-```bash                                                 |
+```bash                                                
 docker run --name fixit-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=fixit -p 5432:5432 -d postgres:17
 ```
 
@@ -168,6 +168,7 @@ docker compose exec backend python -m app.seed
 | `MAX_UPLOAD_SIZE_MB`                                  | Maximum upload size in MB                                                     | `5`                                                           |
 | `MAX_IMAGE_PIXELS`                                    | Maximum image resolution (width x height), checked before decoding            | `40000000`                                                    |
 | `AVATAR_SIZE_PX`                                      | Avatars are cropped to a square of this size                                  | `512`                                                         |
+
 ## CI/CD secrets
 
 Set these under Settings → Secrets and variables → Actions. Until real values exist, they hold placeholders.
