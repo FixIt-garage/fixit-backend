@@ -79,13 +79,7 @@ Use a different key for each environment. Never commit `.env` or share your secr
 
 ### 3. Start Postgres
 
-```bash
-| `STORAGE_BACKEND`                                     | Where uploaded files are stored (only `local` for now)                        | `local`                                                       |
-| `MEDIA_ROOT`                                          | Folder for uploaded files (local storage)                                     | `media`                                                       |
-| `MEDIA_URL`                                           | URL prefix the files are served from                                          | `/media`                                                      |
-| `MAX_UPLOAD_SIZE_MB` 
-| `MAX_IMAGE_PIXELS`                                    | Maximum image resolution (width x height), checked before decoding            | `40000000`                                                    || Maximum upload size in MB                                                     | `5`                                                           |
-| `AVATAR_SIZE_PX`                                      | Avatars are cropped to a square of this size                                  | `512`                                                         |
+```bash                                                 |
 docker run --name fixit-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=fixit -p 5432:5432 -d postgres:17
 ```
 
@@ -168,7 +162,12 @@ docker compose exec backend python -m app.seed
 | `REFRESH_TOKEN_EXPIRE_DAYS`                           | Refresh token lifetime in days                                                | `30`                                                          |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Postgres container credentials (compose)                                      | `postgres` / `postgres` / `fixit`                             |
 | `POSTGRES_PORT`                                       | Host port of the Postgres container (compose)                                 | `5432`                                                        |
-
+| `STORAGE_BACKEND`                                     | Where uploaded files are stored (only `local` for now)                        | `local`                                                       |
+| `MEDIA_ROOT`                                          | Folder for uploaded files (local storage)                                     | `media`                                                       |
+| `MEDIA_URL`                                           | URL prefix the public files (avatars) are served from                         | `/media`                                                      |
+| `MAX_UPLOAD_SIZE_MB`                                  | Maximum upload size in MB                                                     | `5`                                                           |
+| `MAX_IMAGE_PIXELS`                                    | Maximum image resolution (width x height), checked before decoding            | `40000000`                                                    |
+| `AVATAR_SIZE_PX`                                      | Avatars are cropped to a square of this size                                  | `512`                                                         |
 ## CI/CD secrets
 
 Set these under Settings → Secrets and variables → Actions. Until real values exist, they hold placeholders.
@@ -227,7 +226,7 @@ curl -X POST http://localhost:8000/uploads \
 - Limits: `MAX_UPLOAD_SIZE_MB` for the file and `MAX_IMAGE_PIXELS` for the resolution (both: 413).
 - Images are re-encoded, so metadata (EXIF with the GPS location, ICC profiles) is removed. HEIC is stored as JPEG.
 - Avatars are cropped to `AVATAR_SIZE_PX`, set as the user's `avatar_url` and served publicly from `MEDIA_URL/avatars/...`.
-- Chat photos are private. Upload with `kind=chat`, then send the returned `url` (`/uploads/{id}/file`) as `photo_url` in a chat message. The file is returned only with a token, to the uploader and to the participants of a conversation where the uploader sent it (others get 404).
+- Chat photos are private. Upload with `kind=chat`, then send the returned `url` (`/uploads/{id}/file`) as `photo_url` in a chat message. The file is returned only with a token, to the uploader and to the participants of a conversation where the uploader sent it (others get 404).  It is sent with `Cache-Control: no-store`, so devices do not keep a copy; the mobile app should also clear its own image cache on logout or account switch.
 - All responses have `X-Content-Type-Options: nosniff`.
 - Files are stored in `MEDIA_ROOT`. In Docker Compose they live in the `media_data` volume.
 - S3-compatible storage is not implemented yet: add another class next to `LocalStorage` in `app/services/storage.py`.

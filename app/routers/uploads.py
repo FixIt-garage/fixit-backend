@@ -93,5 +93,6 @@ def get_upload_file(
     return FileResponse(
         get_storage().local_path(upload.path),
         media_type=upload.content_type,
-        headers={"Cache-Control": "private, max-age=3600"},
+        # Private photo: no cache may keep it, so after logout or losing access it is gone.
+        headers={"Cache-Control": "no-store"},
     )

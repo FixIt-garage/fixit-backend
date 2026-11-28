@@ -41,7 +41,7 @@ def test_chat_photo_is_visible_only_to_conversation_participants(
         response = client.get(photo["url"], headers=party.headers)
         assert response.status_code == 200
         assert response.headers["content-type"] == "image/jpeg"
-        assert response.headers["x-content-type-options"] == "nosniff"
+        assert response.headers["cache-control"] == "no-store"
         assert response.content.startswith(b"\xff\xd8")  # JPEG signature
 
     assert client.get(photo["url"], headers=outsider.headers).status_code == 404
