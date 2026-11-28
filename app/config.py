@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     media_root: str = "media"
     media_url: str = "/media"
     max_upload_size_mb: int = 5
+    # Width x height limit, checked before the image is decoded into memory.
+    max_image_pixels: int = 40_000_000
     avatar_size_px: int = 512
 
     @field_validator("jwt_secret_key")

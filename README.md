@@ -83,7 +83,8 @@ Use a different key for each environment. Never commit `.env` or share your secr
 | `STORAGE_BACKEND`                                     | Where uploaded files are stored (only `local` for now)                        | `local`                                                       |
 | `MEDIA_ROOT`                                          | Folder for uploaded files (local storage)                                     | `media`                                                       |
 | `MEDIA_URL`                                           | URL prefix the files are served from                                          | `/media`                                                      |
-| `MAX_UPLOAD_SIZE_MB`                                  | Maximum upload size in MB                                                     | `5`                                                           |
+| `MAX_UPLOAD_SIZE_MB` 
+| `MAX_IMAGE_PIXELS`                                    | Maximum image resolution (width x height), checked before decoding            | `40000000`                                                    || Maximum upload size in MB                                                     | `5`                                                           |
 | `AVATAR_SIZE_PX`                                      | Avatars are cropped to a square of this size                                  | `512`                                                         |
 docker run --name fixit-db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=fixit -p 5432:5432 -d postgres:17
 ```
@@ -223,9 +224,10 @@ curl -X POST http://localhost:8000/uploads \
 ```
 
 - Allowed types: jpeg, png, heic. The type is checked from the file content, not its name (other files: 415).
-- Size limit: `MAX_UPLOAD_SIZE_MB` (larger files: 413).
-- Images are re-encoded, so EXIF metadata such as the GPS location is removed. HEIC is stored as JPEG.
-- Avatars are cropped to `AVATAR_SIZE_PX` and set as the user's `avatar_url`.
-- Chat photos: upload with `kind=chat`, then send the returned `url` as `photo_url` in a chat message.
-- Files are stored in `MEDIA_ROOT` and served from `MEDIA_URL`. In Docker Compose they live in the `media_data` volume.
+- Limits: `MAX_UPLOAD_SIZE_MB` for the file and `MAX_IMAGE_PIXELS` for the resolution (both: 413).
+- Images are re-encoded, so metadata (EXIF with the GPS location, ICC profiles) is removed. HEIC is stored as JPEG.
+- Avatars are cropped to `AVATAR_SIZE_PX`, set as the user's `avatar_url` and served publicly from `MEDIA_URL/avatars/...`.
+- Chat photos are private. Upload with `kind=chat`, then send the returned `url` (`/uploads/{id}/file`) as `photo_url` in a chat message. The file is returned only with a token, to the uploader and to the participants of a conversation where the uploader sent it (others get 404).
+- All responses have `X-Content-Type-Options: nosniff`.
+- Files are stored in `MEDIA_ROOT`. In Docker Compose they live in the `media_data` volume.
 - S3-compatible storage is not implemented yet: add another class next to `LocalStorage` in `app/services/storage.py`.

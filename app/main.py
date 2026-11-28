@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -45,8 +45,19 @@ app.include_router(volunteer_requests.router)
 app.include_router(uploads.router)
 
 # Uploaded files are served from MEDIA_ROOT (local storage).
-Path(settings.media_root).mkdir(parents=True, exist_ok=True)
-app.mount(settings.media_url, StaticFiles(directory=settings.media_root), name="media")
+# Uploaded files are served from MEDIA_ROOT (local storage).
+# Only avatars are public static files. Chat photos are private: GET /uploads/{id}/file.
+avatars_dir = Path(settings.media_root) / "avatars"
+avatars_dir.mkdir(parents=True, exist_ok=True)
+app.mount(f"{settings.media_url}/avatars", StaticFiles(directory=avatars_dir), name="avatars")
+
+
+@app.middleware("http")
+async def no_content_sniffing(request: Request, call_next):
+    """Browsers must trust our Content-Type and never guess, e.g. treat an image as HTML."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @app.get("/", response_model=RootResponse)

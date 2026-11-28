@@ -1,13 +1,15 @@
+import inspect
 import io
 from pathlib import Path
 
 import pillow_heif
 import pytest
 from fastapi.testclient import TestClient
-from PIL import Image
+from PIL import Image, ImageCms
 
 from app.config import settings
 from app.models.upload import Upload, UploadKind
+from app.routers.uploads import create_upload
 
 pillow_heif.register_heif_opener()
 
@@ -55,7 +57,7 @@ def test_upload_chat_photo(client: TestClient, test_session_factory, media_root:
     body = response.json()
     assert body["kind"] == "chat"
     assert body["content_type"] == "image/jpeg"
-    assert "/media/chat/" in body["url"]
+    assert body["url"].endswith(f"/uploads/{body['id']}/file")
 
     with test_session_factory() as db:
         stored = db.get(Upload, body["id"])
@@ -88,7 +90,14 @@ def test_heic_is_accepted_and_converted_to_jpeg(client: TestClient) -> None:
     assert response.json()["content_type"] == "image/jpeg"
 
 
-def test_location_metadata_is_removed(client: TestClient, media_root: Path) -> None:
+def stored_file(test_session_factory, media_root: Path, upload_id: int) -> Path:
+    with test_session_factory() as db:
+        return media_root / db.get(Upload, upload_id).path
+
+
+def test_location_metadata_is_removed(
+    client: TestClient, test_session_factory, media_root: Path
+) -> None:
     exif = Image.Exif()
     exif[0x010F] = "PhoneMaker"  # camera make, stands in for GPS and other metadata
     data = image_bytes("JPEG", exif=exif.tobytes())
@@ -96,9 +105,23 @@ def test_location_metadata_is_removed(client: TestClient, media_root: Path) -> N
     response = upload(client, auth_headers(client), "chat", data)
 
     assert response.status_code == 201
-    stored = media_root / response.json()["url"].split("/media/", 1)[1]
-    with Image.open(stored) as image:
+    with Image.open(stored_file(test_session_factory, media_root, response.json()["id"])) as image:
         assert len(image.getexif()) == 0
+
+
+def test_icc_profile_is_removed_from_png(
+    client: TestClient, test_session_factory, media_root: Path
+) -> None:
+    icc = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
+    buffer = io.BytesIO()
+    Image.new("RGBA", (50, 50), "orange").save(buffer, format="PNG", icc_profile=icc)
+
+    response = upload(client, auth_headers(client), "chat", buffer.getvalue(), "photo.png")
+
+    assert response.status_code == 201
+    assert response.json()["content_type"] == "image/png"
+    with Image.open(stored_file(test_session_factory, media_root, response.json()["id"])) as image:
+        assert "icc_profile" not in image.info
 
 
 @pytest.mark.parametrize(
@@ -145,3 +168,24 @@ def test_upload_without_token_is_rejected(client: TestClient) -> None:
     response = upload(client, {}, "chat", image_bytes("PNG"))
 
     assert response.status_code == 401
+
+
+def test_too_many_pixels_is_rejected_before_decoding(
+    client: TestClient, test_session_factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "max_image_pixels", 100 * 100)
+    # A tiny file can hold a big image: 2000x2000 of one colour is a few KB as PNG.
+    data = image_bytes("PNG", (2000, 2000))
+    assert len(data) < 100_000
+
+    response = upload(client, auth_headers(client), "chat", data, "big.png")
+
+    assert response.status_code == 413
+    assert response.json()["code"] == "payload_too_large"
+    with test_session_factory() as db:
+        assert db.query(Upload).count() == 0
+
+
+def test_upload_route_runs_in_worker_thread() -> None:
+    # "async def" would run Pillow and the database calls on the event loop.
+    assert not inspect.iscoroutinefunction(create_upload)
