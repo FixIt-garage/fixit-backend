@@ -12,6 +12,9 @@ dependencies = [
     "pyjwt>=2.15.1",
     "sqlalchemy>=2.1.5",
     "uvicorn[standard]>=0.54.0",
+    "python-multipart>=0.0.34",
+    "pillow>=13.0.0",
+    "pillow-heif>=1.8.1",
 ]
 
 [dependency-groups]
